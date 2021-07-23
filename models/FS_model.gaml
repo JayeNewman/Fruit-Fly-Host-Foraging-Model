@@ -490,14 +490,6 @@ species fly skills: [moving] control: fsm {
     /*
      * Probability that the female will lay in the tree depending on the percent capacity of cumulative eggs over time.
      */
-//	action probability_to_lay_eggs_in_tree {
-//		if myTree.num_fruit_on_tree > 0 {
-//			prob_lay_eggs <- (100 - myTree.percent_occupancy)/100;
-//			if !(flip(prob_lay_eggs)) {
-//				daily_fecundity <- 0;
-//				}
-//			}
-//		}
 	
 		action probability_to_lay_eggs_in_tree {
 		if myTree.num_fruit_on_tree > 0 and current_tree_quality = "non" or 
@@ -557,6 +549,7 @@ grid tree file: grid_map {
 	int nb_eggs_in_tree;
 	int nb_larvae_in_tree;
 	int nb_pupae_in_tree;
+	int nb_tenoral_in_tree;
 	int nb_flies_inside_tree -> length(fly inside self);
 	int capacity;
 	int max_capacity <- 1;
@@ -683,9 +676,9 @@ grid tree file: grid_map {
 	 * Then create a cohort agent with this number of eggs
 	 */
 	reflex calc_eggs_in_tree {
-		bool goodtree <- fruit_quality !="non" and (num_fruit_on_tree > 0);
+		bool goodtree <- fruit_quality !="non" and num_fruit_on_tree > 0;
 		if goodtree {
-			eggs_in_tree <- (fly where (each.myTree = self)) sum_of (each.daily_fecundity);
+			eggs_in_tree <- fly where (each.myTree = self) sum_of (each.daily_fecundity);
 			bool anyeggs <- eggs_in_tree > 0;
 			if anyeggs {
 				create cohort number: 1 {
@@ -705,6 +698,7 @@ grid tree file: grid_map {
 		nb_eggs_in_tree <- cohort where (each.my_larval_tree = self and each.state = "eggs") sum_of (each.nb_cohort);
 		nb_larvae_in_tree <- cohort where (each.my_larval_tree = self and each.state = "larvae") sum_of (each.nb_cohort);
 		nb_pupae_in_tree <- cohort where (each.my_larval_tree = self and each.state = "pupae") sum_of (each.nb_cohort);
+		nb_tenoral_in_tree <- cohort where (each.my_larval_tree = self and each.state = "emerge") sum_of (each.nb_cohort);
 	    nb_cohorts_inside <- length(cohort where (each.my_larval_tree = self));
 	}
 	
@@ -718,7 +712,7 @@ grid tree file: grid_map {
  		}
  	}
 		
-	reflex calc_percentageoccupacy {
+	reflex calc_percentage_occupacy {
 		percent_occupancy <- (occupancy / max_capacity) * 100; // Changed to max_capacity instead of capacity as this was the total number of fruits on the tree. This way it does not go down
  		percent_overcapacity <- percent_occupancy - 100;
 		}
@@ -736,13 +730,14 @@ species cohort control: fsm {
 	float age;
 	float density_mortality;
 	float combined_mortality;
+	int potential_pupae;
 	
 	reflex update_age {
 		age <- age + (step/86400);
 	}
 
 	aspect default {
-		draw circle(0.2) color: #lightpink border: #black;
+		draw circle(0.2) color: #lightpink border: #gray;
 	}
 	
  	action assign_tree_quality {
@@ -785,11 +780,11 @@ species cohort control: fsm {
 		enter {
  			do assign_tree_quality;
  		}
-		if (nb_cohort = 0) {
+		if nb_cohort = 0 {
 			do die;
 		}
 		exit {
-			if (nb_cohort > 0) {
+			if nb_cohort > 0 {
 			loop i from: 1 to: nb_cohort {
 					if flip(egg_mortality) {
 						nb_cohort <- nb_cohort - 1;
@@ -802,35 +797,37 @@ species cohort control: fsm {
 
 	state larvae {
 		enter {
+			if my_larval_tree.nb_larvae_in_tree > my_larval_tree.max_capacity {
+				nb_cohort <- my_larval_tree.max_capacity;
+			}
+			
 			ask my_larval_tree {
 				occupancy <- myself.nb_cohort + occupancy;
 			} 
+			
 			do assign_tree_quality;
  			larval_development_rate <- 1 / days_in_L_stage;
 		}
 		larval_growth <- larval_growth + larval_development_rate;
-		if (nb_cohort = 0) { 
- 			do die;
-		}
 		
+		if nb_cohort = 0 { 
+ 				do die;
+			}
+			
 		exit {
-			if nb_cohort > 0 and my_larval_tree.emerged < my_larval_tree.max_capacity {
-//				loop i from: 1 to: nb_cohort {
-//				if flip(larval_mortality) {
-//					nb_cohort <- nb_cohort - 1;
-//						}
-//					}
-//				} else {
-				density_mortality <- my_larval_tree.occupancy/(my_larval_tree.max_capacity + 0.01);
+			if nb_cohort > 0 {
+			loop i from: 1 to: nb_cohort {
+				density_mortality <- (my_larval_tree.emerged + my_larval_tree.nb_pupae_in_tree + my_larval_tree.nb_tenoral_in_tree)/(my_larval_tree.max_capacity);
 				combined_mortality <- 1-((1-larval_mortality)*(1-density_mortality));
 					if flip(combined_mortality) {
-						nb_cohort <- nb_cohort - 1;
+						nb_cohort <- nb_cohort - 1;						
 						ask my_larval_tree {
 							occupancy <- occupancy - 1;
 							} 
 						}			
-					} 
-				} 
+					}
+				}
+			} 
 		transition to: pupae when: larval_growth >= 1.0 {
 		}
 	}
@@ -843,23 +840,23 @@ species cohort control: fsm {
 		
 		pupal_growth <- pupal_growth + pupal_development_rate;
 
-		if (nb_cohort = 0 or my_larval_tree.emerged > my_larval_tree.max_capacity) {
+		if nb_cohort = 0 {
 			do die;
 		}
 		
 		exit {
-			if (nb_cohort > 0) {
-			loop i from: 1 to: nb_cohort {
+			if nb_cohort > 0 {
+				loop i from: 1 to: nb_cohort {
 				if flip(pupal_mortality) {
 					nb_cohort <- nb_cohort - 1;
 						}
-					}	
+					}
 				}
 			}
-		transition to: emerge when: pupal_growth >= 1.0;
+		transition to: tenoral when: pupal_growth >= 1.0;
 	}
 
-	state emerge final: true {
+	state tenoral final: true {
 		enter {
 			ask my_larval_tree {
 				emerged <- myself.nb_cohort + emerged;
