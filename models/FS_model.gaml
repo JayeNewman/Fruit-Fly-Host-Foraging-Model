@@ -55,6 +55,7 @@ global torus: true {
 	int host_average_emergence;
 	int host_poor_emergence;
 	float step_distance;
+	float pf_larval_tolerance <- 10.0; // Percent of occupancy/larval_density that the fly will tolerate
 	
 	// the parameters of the weibul function for daily fecundity
  	float beta; 
@@ -131,13 +132,13 @@ global torus: true {
 		[
 		"simulation" + (int(self)+1), cycle, // memory, simultaneous_season, map_name, 
 		nb_adult_total, max_flies, total_fruit, max_larvae_per_fruit, //total_good_fruit, total_poor_fruit,
-		flies_in_average_host, flies_in_non_host, //flies_in_poor_host, flies_in_good_host,
-		days_in_ave_host, days_in_non_host, //days_in_poor_host, days_in_good_host,
+		flies_in_good_host, flies_in_non_host, //flies_in_poor_host, flies_in_good_host,
+		days_in_good_host, days_in_non_host, //days_in_poor_host, days_in_good_host,
 		current_date, flies_over_time, wing_length, larval_mortality, total_all_fly_fecundity, immature_flies_over_time
 		//host_good_emergence, host_average_emergence, host_poor_emergence,
 		//total_lf_fecundity_poor, total_lf_fecundity_average, total_lf_fecundity_good, 
 		]
-		to: "../data/results/GOOD_TEST_sensitivity.csv" type: "csv" header: true rewrite: false;
+		to: "../data/results/good_sensitivity_10_b1.csv" type: "csv" header: true rewrite: false;
  	}
  	
 // 	reflex save_fly when: cycle >= 0 {
@@ -272,8 +273,8 @@ species fly skills: [moving] control: fsm {
 		
 		if my_larval_host = "poor" {
  	 		xmid <- 100.0; 
-			//L <- 96.0;  // fixed at poor
-			//E <- 0.035; // fixed at poor
+//			L <- 96.0;  // fixed at poor
+//			E <- 0.035; // fixed at poor
 			mortality_chance <- compute_mortality_chance(compute_survival_curve());
 		}
 		
@@ -352,7 +353,7 @@ species fly skills: [moving] control: fsm {
 	reflex chance_to_die when: (flip(mortality_chance)) {
 		nb_adults <- nb_adults - 1;
 		save (string(cycle) + "," + host + "," + name + "," + my_larval_host + "," + age + "," + adult_age + "," + wing_length + "," + cumulative_fecundity + "," + foraging_radius + "," + cumulative_distance)
-		to: "../data/results/fly_file_GOOD_TEST.csv" type: "csv" header:true rewrite: false;
+		to: "../data/results/fly_file_good_10_b1.csv" type: "csv" header:true rewrite: false;
 		do die;
 	}
 	
@@ -493,7 +494,7 @@ species fly skills: [moving] control: fsm {
 	
 		action probability_to_lay_eggs_in_tree {
 		if myTree.num_fruit_on_tree > 0 and current_tree_quality = "non" or 
-				(current_tree_quality = "poor" and myTree.percent_occupancy > 10) {
+				(current_tree_quality = "poor" and myTree.percent_occupancy > pf_larval_tolerance) {
 					prob_lay_eggs <- 0.0;
 					daily_fecundity <- 0;
 				}
@@ -549,7 +550,7 @@ grid tree file: grid_map {
 	int nb_eggs_in_tree;
 	int nb_larvae_in_tree;
 	int nb_pupae_in_tree;
-	int nb_tenoral_in_tree;
+	int nb_teneral_in_tree;
 	int nb_flies_inside_tree -> length(fly inside self);
 	int capacity;
 	int max_capacity <- 1;
@@ -698,7 +699,7 @@ grid tree file: grid_map {
 		nb_eggs_in_tree <- cohort where (each.my_larval_tree = self and each.state = "eggs") sum_of (each.nb_cohort);
 		nb_larvae_in_tree <- cohort where (each.my_larval_tree = self and each.state = "larvae") sum_of (each.nb_cohort);
 		nb_pupae_in_tree <- cohort where (each.my_larval_tree = self and each.state = "pupae") sum_of (each.nb_cohort);
-		nb_tenoral_in_tree <- cohort where (each.my_larval_tree = self and each.state = "emerge") sum_of (each.nb_cohort);
+		nb_teneral_in_tree <- cohort where (each.my_larval_tree = self and each.state = "teneral") sum_of (each.nb_cohort);
 	    nb_cohorts_inside <- length(cohort where (each.my_larval_tree = self));
 	}
 	
@@ -816,8 +817,9 @@ species cohort control: fsm {
 			
 		exit {
 			if nb_cohort > 0 {
-			loop i from: 1 to: nb_cohort {
-				density_mortality <- (my_larval_tree.emerged + my_larval_tree.nb_pupae_in_tree + my_larval_tree.nb_tenoral_in_tree)/(my_larval_tree.max_capacity);
+			loop i from: 1 to: nb_cohort { // The density mortality is based on what has already transitioned to pupae, teneral and emerged. This is to make sure that the initial cohorts make it through the life cycle first. 
+				// As there was a tendancy that with very high larvae in a cohort they would end up with nothing and so during the second season in some cases there would be no flies emerging, as all the larvae would die.
+				density_mortality <- (my_larval_tree.emerged + my_larval_tree.nb_pupae_in_tree + my_larval_tree.nb_teneral_in_tree)/(my_larval_tree.max_capacity);
 				combined_mortality <- 1-((1-larval_mortality)*(1-density_mortality));
 					if flip(combined_mortality) {
 						nb_cohort <- nb_cohort - 1;						
@@ -853,10 +855,10 @@ species cohort control: fsm {
 					}
 				}
 			}
-		transition to: tenoral when: pupal_growth >= 1.0;
+		transition to: teneral when: pupal_growth >= 1.0;
 	}
 
-	state tenoral final: true {
+	state teneral final: true {
 		enter {
 			ask my_larval_tree {
 				emerged <- myself.nb_cohort + emerged;
@@ -921,7 +923,7 @@ experiment multiple_maps type: gui {
 experiment importFromCSV type: gui {
 
 	action _init_ {
-		csv_file size_csv_file <- csv_file("../includes/ave_fruit_and_size.csv", ",", false);
+		csv_file size_csv_file <- csv_file("../includes/gfas_b1.csv", ",", false);
 		matrix data <- matrix(size_csv_file);
 		write data;
 		loop i from: 0 to: data.rows -1 {  // 19
