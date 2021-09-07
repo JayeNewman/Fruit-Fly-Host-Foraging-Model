@@ -381,8 +381,8 @@ species fly skills: [moving] control: fsm {
 		"," + searching_boundary + 
 		"," + cumulative_distance + 
 		"," + my_larval_mortality_chance + 
-		"," + my_larval_development_time + 
 		"," + my_pupal_mortality_chance + 
+		"," + my_larval_development_time + 
 		"," + my_pupal_development_time)
 		to: "../data/results/average_host_fly_agents_test.csv" type: "csv" header:true rewrite: false;
 		do die; 
