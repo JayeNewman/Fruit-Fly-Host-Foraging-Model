@@ -158,7 +158,7 @@ global torus: true {
 		//host_good_emergence, host_average_emergence, host_poor_emergence,
 		//total_lf_fecundity_poor, total_lf_fecundity_average, total_lf_fecundity_good, 
 		]
-		to: "../data/results/test1.csv" type: "csv" header: true rewrite: false;
+		to: "../data/results/poor_host_sensitivity_2021_09_07.csv" type: "csv" header: true rewrite: false;
  	}
  	
 // 	reflex save_fly when: cycle >= 0 {
@@ -384,7 +384,7 @@ species fly skills: [moving] control: fsm {
 		"," + my_pupal_mortality_chance + 
 		"," + my_larval_development_time + 
 		"," + my_pupal_development_time)
-		to: "../data/results/average_host_fly_agents_test.csv" type: "csv" header:true rewrite: false;
+		to: "../data/results/poor_host_fly_agents_2021_09_07.csv" type: "csv" header:true rewrite: false;
 		do die; 
 	}
 	
@@ -595,7 +595,7 @@ grid tree file: grid_map use_regular_agents: false {
 			color <- #white;
 		}
 		if grid_value = 1.0 {
-			fruit_quality <- "average";  // TODO change back to poor
+			fruit_quality <- "poor";  // TODO change back to poor
 			color <- #salmon;
 //			max_larvae_per_fruit <- 20; // TODO change back to 5
 		}
@@ -641,7 +641,7 @@ grid tree file: grid_map use_regular_agents: false {
 			}
 		}
 			
- 	reflex poor_tree_fruiting when: fruit_quality = "average" { // TODO change back to poor
+ 	reflex poor_tree_fruiting when: fruit_quality = "poor" { // TODO change back to poor
 		if (
 			((simultaneous_season = true) and (current_date = date(current_date.year, 1,5) or current_date = date(current_date.year, 8,25))) 
 			or
@@ -659,7 +659,7 @@ grid tree file: grid_map use_regular_agents: false {
 			}
 		}
 		
-	reflex average_tree_fruiting when: fruit_quality = "average" { // TODO Change back to average
+	reflex average_tree_fruiting when: fruit_quality = "poor" { // TODO Change back to average
 		if (
 			((simultaneous_season = true) and (current_date = date(current_date.year, 1,19) or current_date = date(current_date.year, 9,7)))
 			or 
@@ -677,7 +677,7 @@ grid tree file: grid_map use_regular_agents: false {
 			}
 		}
 		
-		reflex good_tree_fruiting when: fruit_quality = "average" { // TODO change back to good
+		reflex good_tree_fruiting when: fruit_quality = "poor" { // TODO change back to good
 		if (
 			((simultaneous_season = true) and (current_date = date(current_date.year, 2,1) or current_date = date(current_date.year, 9,21)))
 			or 
@@ -955,7 +955,7 @@ experiment multiple_maps type: gui {
 experiment importFromCSV type: gui {
 
 	action _init_ {
-		csv_file size_csv_file <- csv_file("../models/includes/afas_parameters.csv", ",", false);
+		csv_file size_csv_file <- csv_file("../models/includes/pfas_parameters.csv", ",", false);
 		matrix data <- matrix(size_csv_file);
 		write data;
 		loop i from: 0 to: data.rows -1 {  // 19
