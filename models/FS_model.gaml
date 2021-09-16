@@ -12,21 +12,17 @@ model FSmodel
 
 global torus: true {
 	
-	file proba_stay_tree <- csv_file("../models/includes/proba_of_staying_tree.csv", ","); 
-	//file grid_map <- file("../gama_workspace/Foraging_model_with_size/includes/single_fruit_5p.asc");
 	file grid_map <- file("C:/Users/newma/gama_workspace/Foraging_model_with_size/includes/single_fruit_5p.asc");
 	//file grid_map;
 	geometry shape <- envelope(grid_map);
 	string map_name;
  	date starting_date <- date(2020, 8, 24);
  	int nb_fly <- 5;
- 	int immigration_number <- 1;
  	int max_flies <- 0;
  	int nb_adult_total <- 0;
  	int daily_flies;
 	float step <- 1 #day;
 	float speed <- 1.0;
-	bool memory <- false;
 	bool simultaneous_season <- false;
 //	bool immigration <- false;	
  
@@ -68,13 +64,6 @@ global torus: true {
 	float L;
 	float E; 
 	
-	//	 memory affiliation probability to stay
- 	matrix proba_stay <- matrix(proba_stay_tree);
-	list memory_prob_1 <- proba_stay column_at 1;
-	list memory_prob_2 <- proba_stay column_at 2;
-	list memory_prob_3 <- proba_stay column_at 3;
-	list memory_prob_4 <- proba_stay column_at 4; 
-	
 	// 	Tree parameters
  	// 	parameters for calculating number of fruit per tree over time	
  	float a <- 10.0;  // height of curve
@@ -85,15 +74,6 @@ global torus: true {
  	 
  	 
  	//REFLEXES
- 	 	
-// 	reflex immigrate when: immigration = true { 		
-// 		if current_date = date(current_date.year, 9,1) {
-//		create fly number: immigration_number {
-//			my_cohort <- "immigrated";
-//			my_larval_host <- "average";
-//			}
-//		}
-// 	}
  	
  	reflex count_max {
  		if max_flies < nb_adults {
@@ -136,7 +116,7 @@ global torus: true {
 		[
 		"simulation" + (int(self)+1), 
 		cycle, 
-		// memory, simultaneous_season, map_name, 
+		// simultaneous_season, map_name, 
 		nb_adult_total, 
 		max_flies, 
 		total_fruit, 
@@ -160,18 +140,6 @@ global torus: true {
 		]
 		to: "../data/results/average_host_sensitivity_2021_09_10__0-16.csv" type: "csv" header: true rewrite: false;
  	}
- 	
-// 	reflex save_fly when: cycle >= 0 {
-//	 	ask fly {
-//			// save the values of the variables name, speed and size to the csv file; the rewrite facet is set to false to continue to write in the same file
-//			save [
-//			"simulation" + (int(self)+1), cycle, name, current_date, 
-//				xmid, E, L, state, age, my_larval_host, wing_length, 
-//				daily_fecundity, cumulative_fecundity, 
-//				sensing_boundary, searching_boundary, step_distance, cumulative_distance
-//			] to: "../data/results/fly_agent_good_sensitivity_test.csv" type: "csv" rewrite: false;
-//	 	}
-// 	}
  	
 // 	reflex save_map {
 // 		save tree to: "../data/results/map" + map_name + "map.png" type: "image";
@@ -218,7 +186,6 @@ species fly skills: [moving] control: fsm {
 	float prob_lay_eggs;
 	int counter <- 0;
 	string current_affiliated_fruit;
-	int memory_count;
 	//float wing_length; // TODO undo for experiments 
 	float sensing_boundary <- 10#m;
 	float step_distance;
@@ -388,25 +355,6 @@ species fly skills: [moving] control: fsm {
  	 	current_tree_quality <- myTree.fruit_quality;
  	 }
  	
-	/* Memory and affiliation
-	 */ 
- 	reflex new_affiliated_host when: memory = true and (memory_count <= 0) and (myTree.num_fruit_on_tree >=1) {
-		if current_tree_quality = "poor" {
-			memory_count <- 2;
-			current_affiliated_fruit <- "poor";
-		}
-
-		if current_tree_quality = "average" {
-			memory_count <- 3;
-			current_affiliated_fruit <- "average";
-		}
-
-		if current_tree_quality = "good" {
-			memory_count <- 4;
-			current_affiliated_fruit <- "good";
-		}
-	}
-
 	// ACTIONS //
 	
 	/* Movement
@@ -440,72 +388,6 @@ species fly skills: [moving] control: fsm {
 							
 				}
 		}
-
-	action move_to_affiliated {
-		ask tree overlapping self {
-			myself.myTree <- self;
-		}
-		fruiting_trees <- tree at_distance sensing_boundary where (each.num_fruit_on_tree >= 1);
-		affiliated_fruit_within_boundary <- fruiting_trees where (each.fruit_quality = current_affiliated_fruit);
-		if !empty(affiliated_fruit_within_boundary) {
-			myTree <- one_of(fruiting_trees);
-			location <- myTree.location;
-		} else {
-			do directed_move;
-		}
-	}
-	
-	action probability_to_stay {
-		if memory = true {
-		if current_affiliated_fruit = "poor" {
-			float my_exp_1 <- memory_prob_1 at counter;
-			if (flip(my_exp_1)) {
-				do move_to_affiliated;
-				memory_count <- 3;
-				counter <- 1;
-			} else {
-				do directed_move;
-				memory_count <- memory_count - 1;
-				counter <- counter + 1;
-				if counter > 4 {
-					counter <- 5;
-				}
-			}
-		}
-		if current_affiliated_fruit = "average" {
-			float my_exp_2 <- memory_prob_2 at counter;
-			if (flip(my_exp_2)) {
-				do move_to_affiliated;
-				memory_count <- 3;
-				counter <- 1;
-			} else {
-				do directed_move;
-				memory_count <- memory_count - 1;
-				counter <- counter + 1;
-				if counter > 4 {
-					counter <- 5;
-				}
-			}
-		}
-		if current_affiliated_fruit = "good" {
-			float my_exp_3 <- memory_prob_3 at counter;
-			if (flip(my_exp_3)) {
- 			do move_to_affiliated;
-				memory_count <- 4;
-				counter <- 1;
-			} else {
-				do directed_move;
-				memory_count <- memory_count - 1;
-				counter <- counter + 1;
-				if counter > 4 {
-					counter <- 5;
-				}
-			}
-		} else {
-			do directed_move;
-			}
-		}
-	}
  
     /* Probability that the female will lay in the tree depending on the percent capacity of cumulative eggs over time.
      */
@@ -566,7 +448,7 @@ grid tree file: grid_map use_regular_agents: false {
 	int nb_larvae_in_tree;
 	int nb_pupae_in_tree;
 	int nb_teneral_in_tree;
-	int nb_flies_inside_tree; //-> length (fly overlapping self);
+	int nb_flies_inside_tree;
 	int capacity;
 	int max_capacity <- 1;
 	int emerged;
@@ -934,7 +816,6 @@ experiment multiple_maps type: gui {
 			create simulation with: [
 				grid_map::grid_file(data[0, i]),
 				map_name::string(data[1, i]),
-				memory::bool(data[2,i]),
 				simultaneous_season::bool(data[3,i])
 				];
 		}
