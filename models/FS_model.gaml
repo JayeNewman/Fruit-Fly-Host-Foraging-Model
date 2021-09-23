@@ -89,18 +89,18 @@ global torus: true {
 		//host_average_emergence <- length(fly where (each.my_larval_host = "average"));
 		//host_average_emergence <- fly count (each.my_larval_host = "average");
 		//host_poor_emergence <- length(fly where (each.my_larval_host = "poor"));
-		host_poor_emergence <- fly count (each.my_larval_host = "poor");
+		//host_poor_emergence <- fly count (each.my_larval_host = "poor");
 	}
 
 	int total_fruit -> tree sum_of(each.num_fruit_on_tree);
 	int flies_in_non_host -> tree where (each.fruit_quality = "non") sum_of (each.nb_flies_inside_tree);
-	int flies_in_poor_host -> tree where (each.fruit_quality = "poor") sum_of (each.nb_flies_inside_tree);
+//	int flies_in_poor_host -> tree where (each.fruit_quality = "poor") sum_of (each.nb_flies_inside_tree);
 	int flies_in_average_host -> tree where (each.fruit_quality = "average") sum_of (each.nb_flies_inside_tree);
-//	int flies_in_good_host -> tree where (each.fruit_quality = "good") sum_of (each.nb_flies_inside_tree); //// This code is for saving time step values during the batch runs
+	int flies_in_good_host -> tree where (each.fruit_quality = "good") sum_of (each.nb_flies_inside_tree); //// This code is for saving time step values during the batch runs
 //	int total_good_fruit -> tree where (each.fruit_quality = "good") sum_of (each.num_fruit_on_tree);
- 	int total_poor_fruit -> tree where (each.fruit_quality = "poor") sum_of (each.num_fruit_on_tree);
+// 	int total_poor_fruit -> tree where (each.fruit_quality = "poor") sum_of (each.num_fruit_on_tree);
 // 	int total_average_fruit -> tree where (each.fruit_quality = "average") sum_of (each.num_fruit_on_tree);
- 	int total_lf_fecundity_poor <- fly where(each.my_larval_host = "poor") sum_of (each.cumulative_fecundity);
+// 	int total_lf_fecundity_poor <- fly where(each.my_larval_host = "poor") sum_of (each.cumulative_fecundity);
 // 	int total_lf_fecundity_average <- fly where(each.my_larval_host = "average") sum_of (each.cumulative_fecundity);
 // 	int total_lf_fecundity_good <- fly where(each.my_larval_host = "good") sum_of (each.cumulative_fecundity);
  	
@@ -137,7 +137,7 @@ global torus: true {
 		//host_good_emergence, host_average_emergence, host_poor_emergence,
 		//total_lf_fecundity_poor, total_lf_fecundity_average, total_lf_fecundity_good, 
 		]
-		to: "../data/results/average_host_sensitivity_2021_09_23_pfas_0-400.csv" type: "csv" header: true rewrite: false;
+		to: "../data/results/poor_host_sensitivity_2021_09_24_gfas_0-50_fixed_max_larvae.csv" type: "csv" header: true rewrite: false;
  	}
  	
 // 	reflex save_map {
@@ -241,15 +241,15 @@ species fly skills: [moving] control: fsm {
 		
 		if my_larval_host = "poor" {
  	 		xmid <- 100.0; 
-			L <- 96.0;  // fixed at poor
-			E <- 0.035; // fixed at poor
+//			L <- 96.0;  // fixed at poor
+//			E <- 0.035; // fixed at poor
 			mortality_chance <- compute_mortality_chance(compute_survival_curve());
 		}
 		
 		if my_larval_host = "good" {
  	 		xmid <- 137.0;
-//			L <- 100.0;  // TODO undo for experiments
-//			E <- 0.045; 
+			L <- 100.0;  // TODO undo for experiments
+			E <- 0.045; 
 			mortality_chance <- compute_mortality_chance(compute_survival_curve());
 		}
 		
@@ -324,7 +324,7 @@ species fly skills: [moving] control: fsm {
 		"," + searching_boundary + 
 		"," + imm_cumulative_distance +
 		"," + cumulative_distance)
-		to: "../data/results/poor_host_fly_agents_2021_09_23_pfas_0-400.csv" type: "csv" header:true rewrite: false;
+		to: "../data/results/poor_host_fly_agents_2021_09_24_gfas_0-50_fixed_max_larvae.csv" type: "csv" header:true rewrite: false;
 		do die; 
 	}
 	
@@ -450,7 +450,7 @@ grid tree file: grid_map use_regular_agents: false {
 			color <- #white;
 		}
 		if grid_value = 1.0 {
-			fruit_quality <- "poor";  // TODO change back to poor
+			fruit_quality <- "good";  // TODO change back to poor
 			color <- #salmon;
 //			max_larvae_per_fruit <- 20; // TODO change back to 5
 		}
@@ -496,7 +496,7 @@ grid tree file: grid_map use_regular_agents: false {
 			}
 		}
 			
- 	reflex poor_tree_fruiting when: fruit_quality = "poor" { // TODO change back to poor
+ 	reflex poor_tree_fruiting when: fruit_quality = "good" { // TODO change back to poor
 		if (
 			((simultaneous_season = true) and (current_date = date(current_date.year, 1,5) or current_date = date(current_date.year, 8,25))) 
 			or
@@ -514,7 +514,7 @@ grid tree file: grid_map use_regular_agents: false {
 			}
 		}
 		
-	reflex average_tree_fruiting when: fruit_quality = "poor" { // TODO Change back to average
+	reflex average_tree_fruiting when: fruit_quality = "good" { // TODO Change back to average
 		if (
 			((simultaneous_season = true) and (current_date = date(current_date.year, 1,19) or current_date = date(current_date.year, 9,7)))
 			or 
@@ -532,7 +532,7 @@ grid tree file: grid_map use_regular_agents: false {
 			}
 		}
 		
-		reflex good_tree_fruiting when: fruit_quality = "poor" { // TODO change back to good
+		reflex good_tree_fruiting when: fruit_quality = "good" { // TODO change back to good
 		if (
 			((simultaneous_season = true) and (current_date = date(current_date.year, 2,1) or current_date = date(current_date.year, 9,21)))
 			or 
@@ -810,7 +810,7 @@ experiment multiple_maps type: gui {
 experiment importFromCSV type: gui {
 
 	action _init_ {
-		csv_file size_csv_file <- csv_file("../models/includes/pfas_parameters2.csv", ",", false);
+		csv_file size_csv_file <- csv_file("../models/includes/gfas_0to50.csv", ",", false);
 		matrix data <- matrix(size_csv_file);
 		write data;
 		loop i from: 0 to: data.rows -1 {  // 19
