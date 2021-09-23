@@ -68,7 +68,7 @@ global torus: true {
  	float a <- 10.0;  // height of curve
  	float b <- 80.0; // centre of the peak
  	float c <- 30.0; // the width of the bell curve
- 	int max_larvae_per_fruit; 	//TODO remove value for experiments
+ 	int max_larvae_per_fruit <- 20; 	//TODO remove value for experiments
 // 	list<tree> trees_with_fruits <- tree where(each.num_fruit_on_tree >=1) update: tree where(each.num_fruit_on_tree >=1);
  	 
  	 
@@ -137,7 +137,7 @@ global torus: true {
 		//host_good_emergence, host_average_emergence, host_poor_emergence,
 		//total_lf_fecundity_poor, total_lf_fecundity_average, total_lf_fecundity_good, 
 		]
-		to: "../data/results/average_host_sensitivity_2021_09_21_pfas_0-400.csv" type: "csv" header: true rewrite: false;
+		to: "../data/results/average_host_sensitivity_2021_09_23_pfas_0-400.csv" type: "csv" header: true rewrite: false;
  	}
  	
 // 	reflex save_map {
@@ -324,7 +324,7 @@ species fly skills: [moving] control: fsm {
 		"," + searching_boundary + 
 		"," + imm_cumulative_distance +
 		"," + cumulative_distance)
-		to: "../data/results/poor_host_fly_agents_2021_09_21_pfas_0-400.csv" type: "csv" header:true rewrite: false;
+		to: "../data/results/poor_host_fly_agents_2021_09_23_pfas_0-400.csv" type: "csv" header:true rewrite: false;
 		do die; 
 	}
 	
@@ -815,7 +815,7 @@ experiment importFromCSV type: gui {
 		write data;
 		loop i from: 0 to: data.rows -1 {  // 19
 			create simulation with: [
-				max_larvae_per_fruit::int(data[0,i]),
+				// max_larvae_per_fruit::int(data[0,i]),
 				wing_length::float(data[1,i]),
 				larval_mortality::float(data[2, i]), 
 				pupal_mortality::float(data[3, i]), 
