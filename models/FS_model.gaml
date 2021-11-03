@@ -194,6 +194,7 @@ species fly skills: [moving] control: fsm {
 	/* LISTS for evaluating foraging
 	 */
 	list<tree> fruiting_trees; // where the trees are fruiting	
+	list<tree> distant_fruiting_trees; //where trees are fruiting within thier searching boundary
  	list<tree> affiliated_fruit_within_boundary;  // Memory component
  	
  	/* Calculating the functions for 
@@ -359,23 +360,40 @@ species fly skills: [moving] control: fsm {
 		ask tree overlapping self {
 				myself.myTree <- self;
 				}
+									write "wandered" + " " + name;
+				
  		} 	
  		
  	/*  Directed move is based on OPTIMAL FORAGING / BEST CHOICE BEHAVIOUR. 
 	 * The highest grid value within the sensing boundary is selected
 	 */	
 	action directed_move {
- 			fruiting_trees <- (tree where (each.num_fruit_on_tree >= 1)) at_distance sensing_boundary;	
-			if !empty(fruiting_trees) {	
+ 			fruiting_trees <- (tree where (each.num_fruit_on_tree >= 1)) at_distance searching_boundary;	
+ 			distant_fruiting_trees <- (tree where (each.num_fruit_on_tree >= 1)) at_distance searching_boundary;
+			if !empty(fruiting_trees) {
+				write "nearby" + fruiting_trees + " " + name;	
 				do move speed: sensing_boundary #m / #s bounds: circle(sensing_boundary, location);
-			    tree maxtree <- (fruiting_trees) with_max_of (each.grid_value);
+			    tree maxtree <- fruiting_trees with_max_of (each.grid_value);
 			    float maxquality <- maxtree.grid_value; 
 				tree bestTree <- shuffle(fruiting_trees) first_with (each.grid_value = maxquality);
 				location <- bestTree.location;
 				step_distance <- myTree distance_to(location);
 				cumulative_distance <- cumulative_distance + step_distance;
 				myTree <- bestTree;
-				} else {
+				} 
+			if empty(fruiting_trees) and !empty(distant_fruiting_trees) {
+				write "nearby" + fruiting_trees + " " + name;	
+				do move speed: searching_boundary #m / #s bounds: circle(searching_boundary, location);
+			    tree maxtree <- fruiting_trees with_max_of (each.grid_value);
+			    float maxquality <- maxtree.grid_value; 
+				tree bestTree <- shuffle(maxtree) first_with (each.grid_value = maxquality);
+				location <- bestTree.location;
+				step_distance <- myTree distance_to(location);
+				cumulative_distance <- cumulative_distance + step_distance;
+				myTree <- bestTree;
+				} 
+			
+			if empty(fruiting_trees) and empty(distant_fruiting_trees) {
 					do simple_wander;
 				}
 		}
