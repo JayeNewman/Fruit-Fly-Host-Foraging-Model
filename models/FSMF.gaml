@@ -1,13 +1,12 @@
 /**
-* Name: FSMmodel
-* Based on the foraging and size model. Includes memory. A population dynamics model in a heterogeneous landscape with four types of fruit trees where seasonality can be simultaneous or sequential.
-
+* Name: FSMF
+* Based on Foraging Size Memory [FSM] model. Here fruits are introduced as a species in the model. 
 * Author: newma
 * Tags: 
 */
 
 
-model FSMmodel
+model FSMF
 
 /* Insert your model definition here */
 
@@ -369,7 +368,6 @@ species fly skills: [moving] control: fsm {
 		ask tree overlapping self {
 				myself.myTree <- self;
 				}
-		write "wandered" + " " + name;	
  		} 	
  		
  	/*  Directed move is based on OPTIMAL FORAGING / BEST CHOICE BEHAVIOUR. 
@@ -379,7 +377,6 @@ species fly skills: [moving] control: fsm {
  			fruiting_trees <- (tree where (each.num_fruit_on_tree >= 1)) at_distance searching_boundary;	
  			distant_fruiting_trees <- (tree where (each.num_fruit_on_tree >= 1)) at_distance searching_boundary;
 			if !empty(fruiting_trees) {
-				write "nearby" + fruiting_trees + " " + name;	
 				do move speed: sensing_boundary #m / #s bounds: circle(sensing_boundary, location);
 			    tree maxtree <- fruiting_trees with_max_of (each.grid_value);
 			    float maxquality <- maxtree.grid_value; 
@@ -390,7 +387,6 @@ species fly skills: [moving] control: fsm {
 				myTree <- bestTree;
 				} 
 			if empty(fruiting_trees) and !empty(distant_fruiting_trees) {
-				write "nearby" + fruiting_trees + " " + name;	
 				do move speed: searching_boundary #m / #s bounds: circle(searching_boundary, location);
 			    tree maxtree <- fruiting_trees with_max_of (each.grid_value);
 			    float maxquality <- maxtree.grid_value; 
@@ -420,14 +416,6 @@ species fly skills: [moving] control: fsm {
 	}
 	
 	action probability_to_stay {
-//		if memory = true and current_tree_quality = "non" {
-//			if (flip(0.05)) {
-//				//do move_to_affiliated;
-//			//} else {
-//				do directed_move;
-//				memory_count <- memory_count - 1;
-//			}
-//		}
 		if memory = true and current_affiliated_fruit = "poor" {
 			float my_exp_1 <- memory_prob_1 at counter;
 			if (flip(my_exp_1)) {
@@ -526,6 +514,33 @@ species fly skills: [moving] control: fsm {
 	}
 }
 
+species fruit {
+	tree fruitTree <- tree closest_to self;
+	int fruits_in_tree;
+	int days_on_tree;
+	int fallen_fruit;
+	
+	// TODO how many days on the tree will the fruit last? and set the time for the fruit to rot.
+	
+	reflex update_fruit {
+		if (fruitTree.num_fruit_on_tree) > fruits_in_tree {
+			fruits_in_tree <- fruitTree.num_fruit_on_tree;
+		}
+		if days_on_tree > 0 {
+			days_on_tree <- days_on_tree - 1;
+		} 
+		if days_on_tree <= 0 {
+			fallen_fruit <- fallen_fruit - 1;
+		} if days_on_tree <= 0 and fallen_fruit <= 0 {
+			do die;
+		}
+	}
+	
+	aspect default {
+		draw square(0.5) color: #yellow;
+	}
+}
+
 grid tree file: grid_map use_regular_agents: false {
 	float grid_value <- grid_value;
 	string fruit_quality;
@@ -547,6 +562,7 @@ grid tree file: grid_map use_regular_agents: false {
 	float percent_overcapacity; 
 	bool in_season <- false;
 	int rot;
+	int fruit_created;
 	
 	init {
 		if grid_value = 0.0 {
@@ -575,6 +591,7 @@ grid tree file: grid_map use_regular_agents: false {
  	 action reset_season {
 			in_season <- false;
 			season_day <- 0.0;
+			fruit_created <- 0;
 			occupancy <- 0;
 			percent_occupancy <- 0.0;
 			percent_overcapacity <- 0.0;
@@ -586,6 +603,17 @@ grid tree file: grid_map use_regular_agents: false {
 	action start_season {
 			season_day <- season_day + (step/86400);
 			num_fruit_on_tree <- round(a * exp(-((season_day - b) ^ 2) / (2 * (c ^ 2))));
+			int make_more_fruit <- (num_fruit_on_tree - fruit_created);
+			
+			if fruit_created < num_fruit_on_tree {
+			create fruit number: make_more_fruit {
+				fruitTree <- myself.location;
+				location <- any_location_in(fruitTree);
+				days_on_tree <- 20;
+				fallen_fruit <- 14;
+				}
+				fruit_created <- fruit_created + 1;
+			}
 		}
 	
 //	reflex reduce_fruit { // if comparing simultaneous and sequential fruiting and want to compare the same number of fruits.
@@ -890,6 +918,7 @@ experiment my_experiment {
 		display myDisplay {
 			grid tree lines: #white refresh: false;
 			species fly aspect: default;
+			species fruit aspect: default;
 			species cohort aspect: default;
 		}
 
