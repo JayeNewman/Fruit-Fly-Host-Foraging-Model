@@ -1,18 +1,20 @@
 /**
-* Name: FSmodel
-* Based on the internal empty template. 
+* Name: FSMmodel
+* Based on the foraging and size model. Includes memory. A population dynamics model in a heterogeneous landscape with four types of fruit trees where seasonality can be simultaneous or sequential.
+
 * Author: newma
 * Tags: 
 */
 
 
-model FSmodel
+model FSMmodel
 
 /* Insert your model definition here */
 
 global torus: true {
 	
 	file grid_map <- file("C:/Users/newma/gama_workspace/Foraging_model_with_size/includes/single_fruit_5p.asc");
+	file proba_stay_tree <- csv_file("../includes/proba_of_staying_tree.csv", ","); 
 	//file grid_map;  // generic when multiple maps are utilised in the experiments
 	geometry shape <- envelope(grid_map);
 	string map_name;
@@ -22,6 +24,7 @@ global torus: true {
  	int nb_adult_total <- 0;
 	float step <- 1 #day;
 	float speed <- 1.0;
+	bool memory;
 	bool simultaneous_season <- false;
  
  	// Cohort parameters
@@ -62,6 +65,13 @@ global torus: true {
  	float xmid;
 	float L;
 	float E; 
+	
+	//	 memory affiliation probability to stay
+ 	matrix proba_stay <- matrix(proba_stay_tree);
+	list memory_prob_1 <- proba_stay column_at 1;
+	list memory_prob_2 <- proba_stay column_at 2;
+	list memory_prob_3 <- proba_stay column_at 3;
+	list memory_prob_4 <- proba_stay column_at 4; 
 	
 	// 	Tree parameters
  	// 	parameters for calculating number of fruit per tree over time	
@@ -183,6 +193,7 @@ species fly skills: [moving] control: fsm {
 	float mortality_chance;
 	float prob_lay_eggs;
 	int counter <- 0;
+	int memory_count;
 	string current_affiliated_fruit;
 	float wing_length; // TODO undo for experiments 
 	float sensing_boundary <- 10#m;
@@ -360,8 +371,7 @@ species fly skills: [moving] control: fsm {
 		ask tree overlapping self {
 				myself.myTree <- self;
 				}
-									write "wandered" + " " + name;
-				
+		write "wandered" + " " + name;	
  		} 	
  		
  	/*  Directed move is based on OPTIMAL FORAGING / BEST CHOICE BEHAVIOUR. 
@@ -396,6 +406,78 @@ species fly skills: [moving] control: fsm {
 					do simple_wander;
 				}
 		}
+		
+		action move_to_affiliated {
+		ask tree overlapping self {
+			myself.myTree <- self;
+		}
+		fruiting_trees <- tree at_distance sensing_boundary where (each.num_fruit_on_tree >= 1);
+		affiliated_fruit_within_boundary <- fruiting_trees where (each.fruit_quality = current_affiliated_fruit);
+		if !empty(affiliated_fruit_within_boundary) {
+			myTree <- one_of(fruiting_trees);
+			location <- myTree.location;
+		} else {
+			do directed_move;
+		}
+	}
+	
+	action probability_to_stay {
+//		if memory = true and current_tree_quality = "non" {
+//			if (flip(0.05)) {
+//				//do move_to_affiliated;
+//			//} else {
+//				do directed_move;
+//				memory_count <- memory_count - 1;
+//			}
+//		}
+		if memory = true and current_affiliated_fruit = "poor" {
+			float my_exp_1 <- memory_prob_1 at counter;
+			if (flip(my_exp_1)) {
+				do move_to_affiliated;
+				memory_count <- 3;
+				counter <- 1;
+			} else {
+				do directed_move;
+				memory_count <- memory_count - 1;
+				counter <- counter + 1;
+				if counter > 4 {
+					counter <- 5;
+				}
+			}
+		}
+		if memory = true and current_affiliated_fruit = "average" {
+			float my_exp_2 <- memory_prob_2 at counter;
+			if (flip(my_exp_2)) {
+				do move_to_affiliated;
+				memory_count <- 3;
+				counter <- 1;
+			} else {
+				do directed_move;
+				memory_count <- memory_count - 1;
+				counter <- counter + 1;
+				if counter > 4 {
+					counter <- 5;
+				}
+			}
+		}
+		if memory = true and current_affiliated_fruit = "good" {
+			float my_exp_3 <- memory_prob_3 at counter;
+			if (flip(my_exp_3)) {
+ 			do move_to_affiliated;
+				memory_count <- 4;
+				counter <- 1;
+			} else {
+				do directed_move;
+				memory_count <- memory_count - 1;
+				counter <- counter + 1;
+				if counter > 4 {
+					counter <- 5;
+				}
+			}
+		} else {
+			do directed_move;
+		}
+	}
  
     /* Probability that the female will lay in the tree depending on the percent capacity of cumulative eggs over time.
      */
@@ -444,6 +526,10 @@ species fly skills: [moving] control: fsm {
 		draw circle(sensing_boundary) color: #red empty: true;
 		draw circle(0.3) color: #red;
 	}
+}
+
+species fruit {
+	
 }
 
 grid tree file: grid_map use_regular_agents: false {
@@ -512,6 +598,19 @@ grid tree file: grid_map use_regular_agents: false {
 //		if simultaneous_season = true {
 //			a <- (a/2);
 //		}
+//	}
+
+// MATRIX
+/* Create a matrice for each fruit. The first column will be as the fruit becomes available, the second column is total eggs for all the flies and the third column is the number of flies */
+//	reflex fruit_egg_matrices {
+//		if num_fruit_on_tree > 0 {
+//		list<int> got_fruit <- (num_fruit_on_tree);
+//		list<int> flies_with_eggs <- fly where (each.myTree = self) sum_of (each.daily_fecundity);
+//		int flies_inside <- fly count (each.myTree = self);
+//		matrix<matrix> matrix_of_matrices <- matrix<matrix>({1,5} matrix_with matrix([[got_fruit],[flies_with_eggs], [flies_inside]])) ;
+//	    //matrix<int> got_fruit_matrix <- got_fruit as_matrix {length(num_fruit_on_tree), length(flies_with_eggs)}; 
+//	    write matrix_of_matrices;
+//	    }
 //	}
 	
 	reflex limit_to_extended_emergence {
