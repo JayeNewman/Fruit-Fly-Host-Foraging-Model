@@ -369,7 +369,6 @@ species fly skills: [moving] control: fsm {
 		ask tree overlapping self {
 				myself.myTree <- self;
 				}
-		write "wandered" + " " + name;	
  		} 	
  		
  	/*  Directed move is based on OPTIMAL FORAGING / BEST CHOICE BEHAVIOUR. 
@@ -379,7 +378,6 @@ species fly skills: [moving] control: fsm {
  			fruiting_trees <- (tree where (each.num_fruit_on_tree >= 1)) at_distance searching_boundary;	
  			distant_fruiting_trees <- (tree where (each.num_fruit_on_tree >= 1)) at_distance searching_boundary;
 			if !empty(fruiting_trees) {
-				write "nearby" + fruiting_trees + " " + name;	
 				do move speed: sensing_boundary #m / #s bounds: circle(sensing_boundary, location);
 			    tree maxtree <- fruiting_trees with_max_of (each.grid_value);
 			    float maxquality <- maxtree.grid_value; 
@@ -390,7 +388,6 @@ species fly skills: [moving] control: fsm {
 				myTree <- bestTree;
 				} 
 			if empty(fruiting_trees) and !empty(distant_fruiting_trees) {
-				write "nearby" + fruiting_trees + " " + name;	
 				do move speed: searching_boundary #m / #s bounds: circle(searching_boundary, location);
 			    tree maxtree <- fruiting_trees with_max_of (each.grid_value);
 			    float maxquality <- maxtree.grid_value; 
@@ -586,6 +583,7 @@ grid tree file: grid_map use_regular_agents: false {
 	action start_season {
 			season_day <- season_day + (step/86400);
 			num_fruit_on_tree <- round(a * exp(-((season_day - b) ^ 2) / (2 * (c ^ 2))));
+			list<int> fruit_list <- num_fruit_on_tree;
 		}
 	
 //	reflex reduce_fruit { // if comparing simultaneous and sequential fruiting and want to compare the same number of fruits.
@@ -595,17 +593,32 @@ grid tree file: grid_map use_regular_agents: false {
 //	}
 
 // MATRIX
-/* Create a matrice for each fruit. The first column will be as the fruit becomes available, the second column is total eggs for all the flies and the third column is the number of flies */
-//	reflex fruit_egg_matrices {
-//		if num_fruit_on_tree > 0 {
-//		list<int> got_fruit <- (num_fruit_on_tree);
-//		list<int> flies_with_eggs <- fly where (each.myTree = self) sum_of (each.daily_fecundity);
-//		int flies_inside <- fly count (each.myTree = self);
-//		matrix<matrix> matrix_of_matrices <- matrix<matrix>({1,5} matrix_with matrix([[got_fruit],[flies_with_eggs], [flies_inside]])) ;
-//	    //matrix<int> got_fruit_matrix <- got_fruit as_matrix {length(num_fruit_on_tree), length(flies_with_eggs)}; 
-//	    write matrix_of_matrices;
-//	    }
-//	}
+/* Create a matrice for each fruit. 
+ * The first column will be as the fruit becomes available, 
+ * the second column is total eggs for all the flies in the tree and 
+ * the third column is the number of flies
+ * I want to iterate through the list of fruit and add 5 eggs to each until total eggs = 0
+ */
+	reflex fruit_egg_matrices {
+		if num_fruit_on_tree > 0 {
+		
+		//list<int> flies_with_eggs <- fly where (each.myTree = self) sum_of (each.daily_fecundity);
+		//int flies_inside <- fly count (each.myTree = self);
+		//matrix<matrix> matrix_of_fruit <- matrix<matrix>({1,5} matrix_with matrix([[got_fruit],[flies_with_eggs], [flies_inside]])) ;
+	    //matrix<int> got_fruit_matrix <- got_fruit as_matrix {length(num_fruit_on_tree), length(flies_with_eggs)}; 
+	    //write matrix_of_fruit;
+	    //int test <- length(got_fruit);
+	    
+	    
+//	    loop i from: 1 to: num_fruit_on_tree {
+//					if eggs_in_tree > 5 {
+//						got_fruit <- got_fruit + 5;						
+//						}
+//					}
+
+	    write got_fruit;
+	    }
+	}
 	
 	reflex limit_to_extended_emergence {
 		if season_day > b and num_fruit_on_tree < 1 {

@@ -176,6 +176,31 @@ global torus: true {
 		}
 	}
 
+species fruit {
+	tree fruitTree;
+	int egg_clutch;
+	bool larvae_within;
+	int egg_day;
+	bool available;
+	
+	init {
+		available <- true;
+	}
+	
+	reflex when: egg_clutch > 0 {
+		egg_day <- egg_day + 1;
+		if egg_day > 2 {
+			larvae_within <- true;
+		} else {
+			larvae_within <- false;
+		}		
+	}
+	
+	reflex die when: available = false {
+		do die;
+	}
+}
+
 species fly skills: [moving] control: fsm {
 	tree myTree <- one_of(tree);  // name of tree
 	string current_tree_quality;
@@ -200,6 +225,8 @@ species fly skills: [moving] control: fsm {
 	float searching_boundary;
 	float cumulative_distance;
 	float imm_cumulative_distance;
+	int number_acceptable_larval_encounters <- 5;
+	int flown;
 	
 	/* LISTS for evaluating foraging
 	 */
@@ -217,7 +244,7 @@ species fly skills: [moving] control: fsm {
 	float compute_enya {return ((0.6411*wing_length^2)-(5.0078*wing_length)+35.293);}
 	float compute_coeff {return ((200*enya) - 4600);}
 	float compute_daily_eggs {return (round((beta / enya) * (((adult_age - loc) / enya) ^ (beta - 1)) * (exp(-(((adult_age - loc) / enya) ^ beta))) * (coeff)));}	
- 	float compute_sd_of_eggs {return (0.1 * daily_fecundity);} 
+ 	//float compute_sd_of_eggs {return (0.1 * daily_fecundity);} 
  
  	// STATES 
 	state immature_adult initial: true {
@@ -271,7 +298,7 @@ species fly skills: [moving] control: fsm {
 		}
 		
 		// The only action for movement. Contains directed and simple wander.
-		do directed_move;
+		do probability_to_stay;
 		
 		// Daily Fecundity depending on larval host
 		if adult_age > 7.0 {
@@ -281,8 +308,7 @@ species fly skills: [moving] control: fsm {
 				enya <- compute_enya();
 				coeff <- compute_coeff();
 				int daily_fecundity_result <- round(compute_daily_eggs());
-				int daily_sd_fecundity_result <- round(compute_sd_of_eggs());
-				daily_fecundity <- round(gauss(daily_fecundity_result, daily_sd_fecundity_result));
+				daily_fecundity <- round(daily_fecundity_result);
 				}
 
 			if my_larval_host = "average" { 
@@ -291,8 +317,7 @@ species fly skills: [moving] control: fsm {
 				enya <- compute_enya();
 				coeff <- compute_coeff();
 				int daily_fecundity_result <- round(compute_daily_eggs());
-				int daily_sd_fecundity_result <- round(compute_sd_of_eggs());
-				daily_fecundity <- round(gauss(daily_fecundity_result, daily_sd_fecundity_result));
+				daily_fecundity <- round(daily_fecundity_result);
 				}
 
 			if my_larval_host = "good" {
@@ -301,8 +326,7 @@ species fly skills: [moving] control: fsm {
 				enya <- compute_enya();
 				coeff <- compute_coeff();
 				int daily_fecundity_result <- round(compute_daily_eggs());
-				int daily_sd_fecundity_result <- round(compute_sd_of_eggs());
-				daily_fecundity <- round(gauss(daily_fecundity_result, daily_sd_fecundity_result));	
+				daily_fecundity <- round(daily_fecundity_result);	
 				}		
 			
 			if daily_fecundity < 0 or myTree.num_fruit_on_tree < 1 {
@@ -391,7 +415,7 @@ species fly skills: [moving] control: fsm {
 			    tree maxtree <- fruiting_trees with_max_of (each.grid_value);
 			    float maxquality <- maxtree.grid_value; 
 				tree bestTree <- shuffle(maxtree) first_with (each.grid_value = maxquality);
-				location <- bestTree.location;
+				location <-bestTree.location;
 				step_distance <- myTree distance_to(location);
 				cumulative_distance <- cumulative_distance + step_distance;
 				myTree <- bestTree;
@@ -401,7 +425,7 @@ species fly skills: [moving] control: fsm {
 				}
 		}
 		
-		action move_to_affiliated {
+	action move_to_affiliated { 
 		ask tree overlapping self {
 			myself.myTree <- self;
 		}
@@ -465,28 +489,52 @@ species fly skills: [moving] control: fsm {
 		}
 	}
  
-    /* Probability that the female will lay in the tree depending on the percent capacity of cumulative eggs over time.
+    /* Probability that the female will lay eggs in fruit in the tree
      */
 		action probability_to_lay_eggs_in_tree {
-		if myTree.num_fruit_on_tree > 0 and current_tree_quality = "non" or 
-				(current_tree_quality = "poor" and myTree.percent_occupancy > pf_larval_tolerance) {
+		if myTree.num_fruit_in_list > 0 and current_tree_quality = "non" 
+		// or (current_tree_quality = "poor" and myTree.percent_occupancy) 
+		{
 					prob_lay_eggs <- 0.0;
 					daily_fecundity <- 0;
-				}
+					}
 		
-		if myTree.num_fruit_on_tree > 0 and current_tree_quality = "average" {
-			prob_lay_eggs <- (100 - myTree.percent_occupancy)/100;
-			if !(flip(prob_lay_eggs)) {
-				daily_fecundity <- 0;
+		if myTree.num_fruit_in_list > 0 and current_tree_quality = "poor" {
+				int remaining_fecundity <- daily_fecundity;
+				int larval_encounter;
+				loop while: remaining_fecundity > 4 {
+					list<fruit> the_trees_fruit <- shuffle(myTree.list_of_fruit);
+					fruit myFruit <- first(the_trees_fruit);
+				if myFruit.larvae_within = false {
+					myFruit.egg_clutch <- myFruit.egg_clutch + 5;
+					remaining_fecundity <- remaining_fecundity - 5;
+					} 
+					else { // Does probability to move to affiliated host, moves to that host and then does NOT lay eggs
+						larval_encounter <- larval_encounter + 1;
+						if larval_encounter > number_acceptable_larval_encounters {
+							do probability_to_stay;
+							daily_fecundity <- 0;
+							remaining_fecundity <- 0;
+						}
+					}		
 				}
-			}
-			
-			else {
-				if myTree.num_fruit_on_tree > 0 and current_tree_quality = "good" {
-				prob_lay_eggs <- 1.0;
+			if remaining_fecundity <= 4 {
+					list<fruit> the_trees_fruit <- shuffle(myTree.list_of_fruit);
+					fruit myFruit <- first(the_trees_fruit);
+				if myFruit.larvae_within = false {
+					myFruit.egg_clutch <- myFruit.egg_clutch + remaining_fecundity;
+					remaining_fecundity <- 0;	
+						}	
+					}	
 				}
+			if myTree.num_fruit_in_list > 0 and current_tree_quality = "average" {
+				// number of larvae in tree: occupancy 
+				// number of fruit_occupied: sum list_of_fruit in myTree with with_larvae = true
+				// occupancy / fruit_occupied = ave_larval_density 
+				// if the ave_larval_density < total of larvae a fruit can hold
+				// then probability to lay eggs based on ave_larval_density
+				}		
 			}
-		}
 	
 	/* Calculate the days spent in each host if not overwintering
  	  */
@@ -514,33 +562,6 @@ species fly skills: [moving] control: fsm {
 	}
 }
 
-species fruit {
-	tree fruitTree <- tree closest_to self;
-	int fruits_in_tree;
-	int days_on_tree;
-	int fallen_fruit;
-	
-	// TODO how many days on the tree will the fruit last? and set the time for the fruit to rot.
-	
-	reflex update_fruit {
-		if (fruitTree.num_fruit_on_tree) > fruits_in_tree {
-			fruits_in_tree <- fruitTree.num_fruit_on_tree;
-		}
-		if days_on_tree > 0 {
-			days_on_tree <- days_on_tree - 1;
-		} 
-		if days_on_tree <= 0 {
-			fallen_fruit <- fallen_fruit - 1;
-		} if days_on_tree <= 0 and fallen_fruit <= 0 {
-			do die;
-		}
-	}
-	
-	aspect default {
-		draw square(0.5) color: #yellow;
-	}
-}
-
 grid tree file: grid_map use_regular_agents: false {
 	float grid_value <- grid_value;
 	string fruit_quality;
@@ -561,8 +582,11 @@ grid tree file: grid_map use_regular_agents: false {
 	float percent_occupancy;
 	float percent_overcapacity; 
 	bool in_season <- false;
-	int rot;
+	int days_fruit_fallen;
 	int fruit_created;
+	int new_daily_fruit;
+	list<fruit> list_of_fruit;
+	int num_fruit_in_list <- length(list_of_fruit);
 	
 	init {
 		if grid_value = 0.0 {
@@ -597,47 +621,45 @@ grid tree file: grid_map use_regular_agents: false {
 			percent_overcapacity <- 0.0;
 			emerged <- 0;
 			max_capacity <- 1;
-			rot <- 0;
+			days_fruit_fallen <- 0;
 		}
 	
 	action start_season {
 			season_day <- season_day + (step/86400);
 			num_fruit_on_tree <- round(a * exp(-((season_day - b) ^ 2) / (2 * (c ^ 2))));
-			int make_more_fruit <- (num_fruit_on_tree - fruit_created);
+			}
 			
-			if fruit_created < num_fruit_on_tree {
-			create fruit number: make_more_fruit {
-				fruitTree <- myself.location;
-				location <- any_location_in(fruitTree);
-				days_on_tree <- 20;
-				fallen_fruit <- 14;
+	reflex fruit_cycle when: num_fruit_on_tree > fruit_created {	
+				new_daily_fruit <- num_fruit_on_tree - fruit_created;
+				tree treeRef <- self;
+			loop i from: 1 to: new_daily_fruit {
+			create fruit number: i {
+				fruitTree <- treeRef;
+				add self to: treeRef.list_of_fruit;
 				}
 				fruit_created <- fruit_created + 1;
-			}
+			}	
 		}
+		
+	reflex reduce_fruit when: num_fruit_on_tree < length(list_of_fruit) {
+		fruit oldest_fruit <- first(list_of_fruit);
+		ask oldest_fruit {
+			remove self from: fruitTree.list_of_fruit;
+			available <- false;
+			write oldest_fruit;
+		}
+	}
+	
 	
 //	reflex reduce_fruit { // if comparing simultaneous and sequential fruiting and want to compare the same number of fruits.
 //		if simultaneous_season = true {
 //			a <- (a/2);
 //		}
 //	}
-
-// MATRIX
-/* Create a matrice for each fruit. The first column will be as the fruit becomes available, the second column is total eggs for all the flies and the third column is the number of flies */
-//	reflex fruit_egg_matrices {
-//		if num_fruit_on_tree > 0 {
-//		list<int> got_fruit <- (num_fruit_on_tree);
-//		list<int> flies_with_eggs <- fly where (each.myTree = self) sum_of (each.daily_fecundity);
-//		int flies_inside <- fly count (each.myTree = self);
-//		matrix<matrix> matrix_of_matrices <- matrix<matrix>({1,5} matrix_with matrix([[got_fruit],[flies_with_eggs], [flies_inside]])) ;
-//	    //matrix<int> got_fruit_matrix <- got_fruit as_matrix {length(num_fruit_on_tree), length(flies_with_eggs)}; 
-//	    write matrix_of_matrices;
-//	    }
-//	}
 	
 	reflex limit_to_extended_emergence {
 		if season_day > b and num_fruit_on_tree < 1 {
-			rot <- rot + 1;
+			days_fruit_fallen <- days_fruit_fallen + 1;
 			}
 		}
 			
@@ -645,15 +667,14 @@ grid tree file: grid_map use_regular_agents: false {
 		if (
 			((simultaneous_season = true) and (current_date = date(current_date.year, 1,5) or current_date = date(current_date.year, 8,25))) 
 			or
-			((simultaneous_season = false) and (current_date = date(current_date.year, 8,25)))
-		)
+			((simultaneous_season = false) and (current_date = date(current_date.year, 8,25))))
 			{
 			in_season <- true;
 			}
 			if in_season = true {
 				do start_season;
 			
-			if season_day > b and num_fruit_on_tree < 1 and rot > 14 {
+			if season_day > b and num_fruit_on_tree < 1 and days_fruit_fallen > 14 {
 					do reset_season;
 				}
 			}
@@ -663,15 +684,14 @@ grid tree file: grid_map use_regular_agents: false {
 		if (
 			((simultaneous_season = true) and (current_date = date(current_date.year, 1,19) or current_date = date(current_date.year, 9,7)))
 			or 
-			((simultaneous_season = false) and (current_date = date(current_date.year, 11,12)))
-		)
+			((simultaneous_season = false) and (current_date = date(current_date.year, 11,12))))
 			{
 			in_season <- true;
 			}
 			if in_season = true {
 				do start_season;
 				
-			if season_day > b and num_fruit_on_tree < 1 and rot > 30 {
+			if season_day > b and num_fruit_on_tree < 1 and days_fruit_fallen > 30 {
 					do reset_season;
 				}
 			}
@@ -681,15 +701,14 @@ grid tree file: grid_map use_regular_agents: false {
 		if (
 			((simultaneous_season = true) and (current_date = date(current_date.year, 2,1) or current_date = date(current_date.year, 9,21)))
 			or 
-			((simultaneous_season = false) and (current_date = date(current_date.year, 2,1)))
-		)
+			((simultaneous_season = false) and (current_date = date(current_date.year, 2,1))))
 			{
 			in_season <- true;
 			}
 			if in_season = true {
 				do start_season;
 			
-			if season_day > b and num_fruit_on_tree < 1 and rot > 30 {
+			if season_day > b and num_fruit_on_tree < 1 and days_fruit_fallen > 30 {
 					do reset_season;
 				}
 			}
@@ -789,7 +808,7 @@ species cohort control: fsm {
 			egg_mortality <- gauss(0.115, 0.089);
 			larval_mortality <- gauss(0.385, 0.15); //TODO undo for experiments
 			pupal_mortality <- gauss(0.057, 0.05);
-			days_in_L_stage <- round(gauss(8, 2));
+			days_in_L_stage <- round(gauss(8, 1));
 			days_in_P_stage <- round(gauss(13, 2));
 		}
 	}
@@ -918,7 +937,6 @@ experiment my_experiment {
 		display myDisplay {
 			grid tree lines: #white refresh: false;
 			species fly aspect: default;
-			species fruit aspect: default;
 			species cohort aspect: default;
 		}
 
