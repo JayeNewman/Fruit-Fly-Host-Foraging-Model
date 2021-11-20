@@ -360,7 +360,7 @@ species fly skills: [moving] control: fsm {
 		ask tree overlapping self {
 				myself.myTree <- self;
 				}
-									write "wandered" + " " + name;
+				write "wandered" + " " + name;
 				
  		} 	
  		

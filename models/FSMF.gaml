@@ -23,7 +23,7 @@ global torus: true {
  	int nb_adult_total <- 0;
 	float step <- 1 #day;
 	float speed <- 1.0;
-	bool memory;
+	bool memory <- true;
 	bool simultaneous_season <- false;
  
  	// Cohort parameters
@@ -52,8 +52,8 @@ global torus: true {
 	int host_average_emergence;
 	int host_poor_emergence;
 	float step_distance;
-	float pf_larval_tolerance <- 10.0; // Percent of occupancy/larval_density that the fly will tolerate
-	
+	int number_acceptable_larval_encounters <- 5;
+		
 	// the parameters of the weibul function for daily fecundity
  	float beta; 
  	float enya; 
@@ -193,7 +193,7 @@ species fruit {
 			larvae_within <- true;
 		} else {
 			larvae_within <- false;
-		}		
+		}
 	}
 	
 	reflex die when: available = false {
@@ -225,8 +225,6 @@ species fly skills: [moving] control: fsm {
 	float searching_boundary;
 	float cumulative_distance;
 	float imm_cumulative_distance;
-	int number_acceptable_larval_encounters <- 5;
-	int flown;
 	
 	/* LISTS for evaluating foraging
 	 */
@@ -255,7 +253,7 @@ species fly skills: [moving] control: fsm {
 		if my_larval_host = "poor" {
  		wing_length <- gauss(5, 0.25);
  			}
- 		if my_larval_host = "average " {
+ 		if my_larval_host = "average" {
  		wing_length <- gauss(5.5, 0.25);
  			}
  		if my_larval_host = "good" {
@@ -277,66 +275,64 @@ species fly skills: [moving] control: fsm {
 		adult_age <- adult_age + (step/86400);
 		do update_tree_quality;
 		if my_larval_host = "average" {
+			
  	 		xmid <- 118.5;
 			L <- 98.0; 
 			E <- 0.04; 
 			mortality_chance <- compute_mortality_chance(compute_survival_curve());
+			
+			beta <- 1.7;
+ 			loc <- 6.0;
+			enya <- compute_enya();
+			coeff <- compute_coeff();
+			int daily_fecundity_result <- round(compute_daily_eggs());
+			daily_fecundity <- round(daily_fecundity_result);
 		}
 		
 		if my_larval_host = "poor" {
+			
  	 		xmid <- 100.0; 
 			L <- 96.0;  // fixed at poor
 			E <- 0.035; // fixed at poor
 			mortality_chance <- compute_mortality_chance(compute_survival_curve());
+			
+			beta <- 1.7;
+ 			loc <- 6.0;
+			enya <- compute_enya();
+			coeff <- compute_coeff();
+			int daily_fecundity_result <- round(compute_daily_eggs());
+			daily_fecundity <- round(daily_fecundity_result);
 		}
 		
 		if my_larval_host = "good" {
+			
+			// survival parameters
  	 		xmid <- 137.0;
 			L <- 100.0;  
 			E <- 0.045; 
 			mortality_chance <- compute_mortality_chance(compute_survival_curve());
-		}
+			
+			// Daily fecundity parameters
+			beta <- 1.7;
+ 			loc <- 6.0;
+			enya <- compute_enya();
+			coeff <- compute_coeff();
+			int daily_fecundity_result <- round(compute_daily_eggs());
+			daily_fecundity <- round(daily_fecundity_result);
+			}
+			
+		if daily_fecundity < 0 or myTree.num_fruit_on_tree < 1 {
+			// there can be a chance that the sd makes the daily fecundity a negative value, so if less than 0, it will default to 0.
+ 			daily_fecundity <- 0; 			
+			}
 		
 		// The only action for movement. Contains directed and simple wander.
 		do probability_to_stay;
-		
-		// Daily Fecundity depending on larval host
-		if adult_age > 7.0 {
-			if my_larval_host = "poor" { 
- 				beta <- 1.7;
- 				loc <- 6.0;
-				enya <- compute_enya();
-				coeff <- compute_coeff();
-				int daily_fecundity_result <- round(compute_daily_eggs());
-				daily_fecundity <- round(daily_fecundity_result);
-				}
-
-			if my_larval_host = "average" { 
- 				beta <- 1.7;
- 				loc <- 6.0;
-				enya <- compute_enya();
-				coeff <- compute_coeff();
-				int daily_fecundity_result <- round(compute_daily_eggs());
-				daily_fecundity <- round(daily_fecundity_result);
-				}
-
-			if my_larval_host = "good" {
- 				beta <- 1.7;
- 				loc <- 6.0;
-				enya <- compute_enya();
-				coeff <- compute_coeff();
-				int daily_fecundity_result <- round(compute_daily_eggs());
-				daily_fecundity <- round(daily_fecundity_result);	
-				}		
-			
-			if daily_fecundity < 0 or myTree.num_fruit_on_tree < 1 {
-			// there can be a chance that the sd makes the daily fecundity a negative value, so if less than 0, it will default to 0.
- 			daily_fecundity <- 0;
-			} 			
-		}
 
 		// final action to perform as it determines the probability of the flies laying eggs.
 		do probability_to_lay_eggs_in_tree; 
+		
+		// update number of days in hosts
 		do calculate_days_in_hosts;
 		
 		// update cumulative fecundity
@@ -351,7 +347,7 @@ species fly skills: [moving] control: fsm {
 		transition to: adult when: current_date = date(current_date.year, 8, 24);
 	}
 	
-	// REFLEXES
+	/// REFLEXES ///
 	
 	/* DIE
 	 */
@@ -376,17 +372,47 @@ species fly skills: [moving] control: fsm {
  		age <- age + 1;
  	}
  	
- 	/* Update my tree quality
- 	 */
-	// ACTIONS //
+ 	/* Memory and affiliation
+	 */ 
+ 	reflex new_affiliated_host when: memory = true and (memory_count <= 0) and (myTree.num_fruit_on_tree >=1) {
+		if current_tree_quality = "poor" {
+			memory_count <- 2;
+			current_affiliated_fruit <- "poor";
+		}
+
+		if current_tree_quality = "average" {
+			memory_count <- 3;
+			current_affiliated_fruit <- "average";
+		}
+
+		if current_tree_quality = "good" {
+			memory_count <- 4;
+			current_affiliated_fruit <- "good";
+		}
+	}
+ 	
+	//// ACTIONS ////
+	
 	action update_tree_quality {
  	 	current_tree_quality <- myTree.fruit_quality;
  	 }
+ 	 
+ 	 action evaluate_boundary {
+ 	 	tree maxtree <- fruiting_trees with_max_of (each.grid_value);
+		float maxquality <- maxtree.grid_value; 
+		tree bestTree <- shuffle(fruiting_trees) first_with (each.grid_value = maxquality);
+		location <- bestTree.location;
+		step_distance <- myTree distance_to(location);
+		cumulative_distance <- cumulative_distance + step_distance;
+		myTree <- bestTree;
+ 	 }
+ 	 
 	/* Movement
 	 */
 	action simple_wander {
-		do wander speed: searching_boundary #m / #s bounds: circle(searching_boundary, location); // speed: 1.0 #m / #day // this is the speed that they can move in a day
-		location <- any_location_in(circle(searching_boundary, location));
+		write "simple wander " +name;
+		do wander speed: sensing_boundary #m / #s bounds: circle(sensing_boundary, location); // speed: 1.0 #m / #day // this is the speed that they can move in a day
+		location <- any_location_in(circle(sensing_boundary, location));
 		step_distance <- myTree distance_to(location);
 		cumulative_distance <- cumulative_distance + step_distance;
 		ask tree overlapping self {
@@ -398,27 +424,18 @@ species fly skills: [moving] control: fsm {
 	 * The highest grid value within the sensing boundary is selected
 	 */	
 	action directed_move {
+		write "directed move " + name;
  			fruiting_trees <- (tree where (each.num_fruit_on_tree >= 1)) at_distance searching_boundary;	
  			distant_fruiting_trees <- (tree where (each.num_fruit_on_tree >= 1)) at_distance searching_boundary;
+ 			// SENSING BOUNDARY
 			if !empty(fruiting_trees) {
 				do move speed: sensing_boundary #m / #s bounds: circle(sensing_boundary, location);
-			    tree maxtree <- fruiting_trees with_max_of (each.grid_value);
-			    float maxquality <- maxtree.grid_value; 
-				tree bestTree <- shuffle(fruiting_trees) first_with (each.grid_value = maxquality);
-				location <- bestTree.location;
-				step_distance <- myTree distance_to(location);
-				cumulative_distance <- cumulative_distance + step_distance;
-				myTree <- bestTree;
+			    do evaluate_boundary;
 				} 
+			// MOVE TO SEARCHING BOUNDARY
 			if empty(fruiting_trees) and !empty(distant_fruiting_trees) {
 				do move speed: searching_boundary #m / #s bounds: circle(searching_boundary, location);
-			    tree maxtree <- fruiting_trees with_max_of (each.grid_value);
-			    float maxquality <- maxtree.grid_value; 
-				tree bestTree <- shuffle(maxtree) first_with (each.grid_value = maxquality);
-				location <-bestTree.location;
-				step_distance <- myTree distance_to(location);
-				cumulative_distance <- cumulative_distance + step_distance;
-				myTree <- bestTree;
+			    do evaluate_boundary;
 				} 
 			if empty(fruiting_trees) and empty(distant_fruiting_trees) {
 					do simple_wander;
@@ -426,6 +443,7 @@ species fly skills: [moving] control: fsm {
 		}
 		
 	action move_to_affiliated { 
+		write " move to affiliated " + name;
 		ask tree overlapping self {
 			myself.myTree <- self;
 		}
@@ -440,6 +458,7 @@ species fly skills: [moving] control: fsm {
 	}
 	
 	action probability_to_stay {
+		write "probability to stay " + name;
 		if memory = true and current_affiliated_fruit = "poor" {
 			float my_exp_1 <- memory_prob_1 at counter;
 			if (flip(my_exp_1)) {
@@ -492,16 +511,17 @@ species fly skills: [moving] control: fsm {
     /* Probability that the female will lay eggs in fruit in the tree
      */
 		action probability_to_lay_eggs_in_tree {
-		if myTree.num_fruit_in_list > 0 and current_tree_quality = "non" 
-		// or (current_tree_quality = "poor" and myTree.percent_occupancy) 
-		{
+		int larval_encounter <- 0;	
+		int sum_list_of_fruit <- length(myTree.list_of_fruit);
+			
+		if current_tree_quality = "non" {
 					prob_lay_eggs <- 0.0;
 					daily_fecundity <- 0;
 					}
-		
-		if myTree.num_fruit_in_list > 0 and current_tree_quality = "poor" {
+		// POOR //
+		if sum_list_of_fruit > 0 and current_tree_quality = "poor" {
 				int remaining_fecundity <- daily_fecundity;
-				int larval_encounter;
+				
 				loop while: remaining_fecundity > 4 {
 					list<fruit> the_trees_fruit <- shuffle(myTree.list_of_fruit);
 					fruit myFruit <- first(the_trees_fruit);
@@ -527,14 +547,75 @@ species fly skills: [moving] control: fsm {
 						}	
 					}	
 				}
-			if myTree.num_fruit_in_list > 0 and current_tree_quality = "average" {
-				// number of larvae in tree: occupancy 
-				// number of fruit_occupied: sum list_of_fruit in myTree with with_larvae = true
-				// occupancy / fruit_occupied = ave_larval_density 
-				// if the ave_larval_density < total of larvae a fruit can hold
-				// then probability to lay eggs based on ave_larval_density
-				}		
-			}
+				
+		// AVERAGE //	
+			if sum_list_of_fruit > 0 and current_tree_quality = "average" { // then probability to lay eggs based on ave_larval_density
+				int remaining_fecundity <- daily_fecundity;
+				float ave_larval_density;
+				
+				loop while: remaining_fecundity > 4 {
+					list<fruit> the_trees_fruit <- shuffle(myTree.list_of_fruit);
+					fruit myFruit <- first(the_trees_fruit);
+					
+					if myFruit.larvae_within = false {
+						myFruit.egg_clutch <- myFruit.egg_clutch + 5;
+						remaining_fecundity <- remaining_fecundity - 5;
+					}
+
+					if myFruit.larvae_within = true {
+						larval_encounter <- larval_encounter + 1;
+						int fruit_occupied <- myTree.list_of_fruit count (myFruit.larvae_within = true);
+						ave_larval_density <- myTree.occupancy / fruit_occupied;
+						
+						if ave_larval_density < myTree.max_capacity {
+						prob_lay_eggs <- (100 - ave_larval_density)/100;
+							if !(flip(prob_lay_eggs)) {
+								myFruit.egg_clutch <- myFruit.egg_clutch + 5;
+								remaining_fecundity <- remaining_fecundity - 5;								
+								}
+							} 
+							if larval_encounter > number_acceptable_larval_encounters {
+								do probability_to_stay;
+								daily_fecundity <- 0;
+								remaining_fecundity <- 0;
+							}
+						}	
+					}
+					
+				if remaining_fecundity <= 4 {
+					list<fruit> the_trees_fruit <- shuffle(myTree.list_of_fruit);
+					fruit myFruit <- first(the_trees_fruit);
+				if myFruit.larvae_within = false {
+						myFruit.egg_clutch <- myFruit.egg_clutch + remaining_fecundity;
+						remaining_fecundity <- 0;
+						} else {
+							if !(flip(prob_lay_eggs)) {
+								myFruit.egg_clutch <- myFruit.egg_clutch + remaining_fecundity;
+								remaining_fecundity <- 0;								
+								}
+						}	
+					}	
+				}
+		// GOOD //	
+			if sum_list_of_fruit > 0 and current_tree_quality = "good" {
+				int remaining_fecundity <- daily_fecundity;
+				
+				loop while: remaining_fecundity > 4 {
+					list<fruit> the_trees_fruit <- shuffle(myTree.list_of_fruit);
+					fruit myFruit <- first(the_trees_fruit);
+					myFruit.egg_clutch <- myFruit.egg_clutch + 5;
+					remaining_fecundity <- remaining_fecundity - 5;		
+				}
+			if remaining_fecundity <= 4 {
+					list<fruit> the_trees_fruit <- shuffle(myTree.list_of_fruit);
+					fruit myFruit <- first(the_trees_fruit);
+
+					myFruit.egg_clutch <- myFruit.egg_clutch + remaining_fecundity;
+					remaining_fecundity <- 0;	
+					}	
+				}
+			}		
+		
 	
 	/* Calculate the days spent in each host if not overwintering
  	  */
@@ -594,7 +675,7 @@ grid tree file: grid_map use_regular_agents: false {
 			color <- #white;
 		}
 		if grid_value = 1.0 {
-			fruit_quality <- "good";  // TODO change back to poor
+			fruit_quality <- "average";  // TODO change back to poor
 			color <- #salmon;
 //			max_larvae_per_fruit <- 20; // TODO change back to 5
 		}
@@ -607,6 +688,14 @@ grid tree file: grid_map use_regular_agents: false {
 			fruit_quality <- "good";
 			color <- #lightgreen;
 //			max_larvae_per_fruit <- 20;
+		}
+	}
+	
+	reflex reduce_fruit when: num_fruit_on_tree < length(list_of_fruit) {
+		fruit oldest_fruit <- first(list_of_fruit);
+		ask oldest_fruit {
+			remove self from: fruitTree.list_of_fruit;
+			available <- false;
 		}
 	}
  
@@ -640,16 +729,6 @@ grid tree file: grid_map use_regular_agents: false {
 				fruit_created <- fruit_created + 1;
 			}	
 		}
-		
-	reflex reduce_fruit when: num_fruit_on_tree < length(list_of_fruit) {
-		fruit oldest_fruit <- first(list_of_fruit);
-		ask oldest_fruit {
-			remove self from: fruitTree.list_of_fruit;
-			available <- false;
-			write oldest_fruit;
-		}
-	}
-	
 	
 //	reflex reduce_fruit { // if comparing simultaneous and sequential fruiting and want to compare the same number of fruits.
 //		if simultaneous_season = true {
@@ -663,7 +742,7 @@ grid tree file: grid_map use_regular_agents: false {
 			}
 		}
 			
- 	reflex poor_tree_fruiting when: fruit_quality = "good" { // TODO change back to poor
+ 	reflex poor_tree_fruiting when: fruit_quality = "average" { // TODO change back to poor
 		if (
 			((simultaneous_season = true) and (current_date = date(current_date.year, 1,5) or current_date = date(current_date.year, 8,25))) 
 			or
@@ -680,7 +759,7 @@ grid tree file: grid_map use_regular_agents: false {
 			}
 		}
 		
-	reflex average_tree_fruiting when: fruit_quality = "good" { // TODO Change back to average
+	reflex average_tree_fruiting when: fruit_quality = "average" { // TODO Change back to average
 		if (
 			((simultaneous_season = true) and (current_date = date(current_date.year, 1,19) or current_date = date(current_date.year, 9,7)))
 			or 
@@ -697,7 +776,7 @@ grid tree file: grid_map use_regular_agents: false {
 			}
 		}
 		
-	reflex good_tree_fruiting when: fruit_quality = "good" { // TODO change back to good
+	reflex good_tree_fruiting when: fruit_quality = "average" { // TODO change back to good
 		if (
 			((simultaneous_season = true) and (current_date = date(current_date.year, 2,1) or current_date = date(current_date.year, 9,21)))
 			or 
