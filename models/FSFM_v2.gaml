@@ -15,20 +15,22 @@ global torus: true {
 	//file grid_map <- file("C:/Users/newma/gama_workspace/Foraging_model_with_size/includes/single_fruit_5p.asc");
 	file grid_map <- file("C:/Users/newma/gama_workspace/Foraging_model_with_size/includes/a30p60.asc");
 	file proba_stay_tree <- csv_file("../includes/proba_of_staying_tree.csv", ","); 
-	//file grid_map;  	/* generic when multiple maps are utilised in the experiments */
+	//file grid_map;  			/* generic when multiple maps are utilised in the experiments */
 	geometry shape <- envelope(grid_map);
-	string map_name;	/* For batch experiments that have multiple maps */
+	string map_name;			/* For batch experiments that have multiple maps */
  	date starting_date <- date(2020, 8, 24);
  	float step <- 1 #day;
- 	int max_flies <- 0;
- 	int nb_adult_total <- 0;
+ 	int max_flies;
+ 	int nb_adult_total;
 
 	
-	/* INPUT PARAMETERS */
-	int nb_fly <- 5;						/* Fly parameter */
-	int mature_age <- 10;					/* Fly parameter */
-	bool memory <- true;					/* Fly parameter */
-	bool simultaneous_season <- true; 		/* Tree parameter */
+	/*** INPUT PARAMETERS ***/
+	int nb_fly <- 5;								/* Fly parameter */
+	int mature_age <- 10;							/* Fly parameter */
+	float sensing_boundary <- 10#m;					/* Fly parameter */
+	int number_acceptable_larval_encounters <- 5; 	/* Fly parameter: number of times fruit with larvae can be encountered before they leave the tree */
+	bool memory <- true;							/* Fly parameter */
+	bool simultaneous_season <- true; 				/* Tree parameter */
 	string global_path_file_name <- "../data/results/global.csv";	/* Global parameter naming file */
 	
 	bool run_experiments <- true;			/* Global parameter: When false sets up model for sensitivity analysis of one fruit host */
@@ -38,8 +40,7 @@ global torus: true {
 	string sensitivity_global_path_file_name <- "../data/results/sensitivity_global_test.csv";	/* Global parameter naming file */
  
  	/* Cohort parameters 
- 	 * To set for sensitivity analysis "run_experiments = false" in the global environment.
- 	 */ 
+ 	 * To set for sensitivity analysis "run_experiments = false" in the global environment. */ 
 	float sensitivity_larval_mortality; 
 	float sensitivity_pupal_mortality;
 	int sensitivity_days_in_L_stage;
@@ -47,46 +48,41 @@ global torus: true {
 	float sensitivity_wing_length;  
 	
 	/* Fly parameters */ 
-	
-	float days_in_IM_stage;
 	int daily_flies;
- 	int nb_adults <- 0;
-	int nb_cohort;
-	//float mortality_chance;
+ 	int nb_adults;
 		
-	// the parameters of the weibul function for daily fecundity
+	/* Weibul function parameters for daily fecundity */ 
  	float beta; 
  	float enya; 
  	float loc;
 	float coeff; 
 	
- 	// parameters for the calculation of the survival curve
+ 	/* Survival function parameters */ 
  	float xmid;
 	float L;
 	float E; 
 	
-	/* Tree parameters */ 	
-	// Parameter values for maximum larvae a single fruit can hold.
-	
+	/* Tree parameters 
+	 * Parameter values for maximum larvae a single fruit can hold. */ 	
  	int poor_max_larvae <- 5;
 	int average_max_larvae <- 10;
 	int good_max_larvae <- 20;
 	
-	int number_acceptable_larval_encounters <- 5;
+  
 	
-	// 	parameters for calculating number of fruit per tree over time
- 	float a <- 5.0;  // height of curve
- 	float b <- 20.0; // centre of the peak
- 	float c <- 10.0; // the width of the bell curve
+	/* Fruit per tree over time */ 	
+ 	float a <- 5.0;  	/* height of curve */ 
+ 	float b <- 20.0; 	/* centre of the peak */ 
+ 	float c <- 10.0; 	/* the width of the bell curve */ 
  	 
- 	 //	 memory affiliation probability to stay
+ 	/* Memory affiliation probability to stay */	 
  	matrix proba_stay <- matrix(proba_stay_tree);
 	list memory_prob_1 <- proba_stay column_at 1;
 	list memory_prob_2 <- proba_stay column_at 2;
 	list memory_prob_3 <- proba_stay column_at 3;
 	list memory_prob_4 <- proba_stay column_at 4; 
 	
- 	 init {create fly number: nb_fly {
+ 	init {create fly number: nb_fly {
  		    location <- any_location_in(one_of(host_trees));
  		    myTree <- tree closest_to self;
 			nb_adults <- nb_adults + 1;
@@ -98,7 +94,7 @@ global torus: true {
 			}
 		}
  	 
- 	//REFLEXES
+ 	/*** REFLEXES ***/
  	
  	reflex count_max {
  		if max_flies < nb_adults {
@@ -118,16 +114,12 @@ global torus: true {
 	int host_poor_emergence;
 	float step_distance;
 
- 	
  	reflex calc_experiment_variables {
 		daily_flies <- length(fly);
 		immature_flies_over_time <- fly count (each.state = "immature_adult");
 		total_all_fly_fecundity <- fly sum_of (each.cumulative_fecundity);
-		host_good_emergence <- length(fly where (each.my_larval_host = "good"));
 		host_good_emergence <- fly count (each.my_larval_host = "good");
-		host_average_emergence <- length(fly where (each.my_larval_host = "average"));
 		host_average_emergence <- fly count (each.my_larval_host = "average");
-		host_poor_emergence <- length(fly where (each.my_larval_host = "poor"));
 		host_poor_emergence <- fly count (each.my_larval_host = "poor");
 	}
 
@@ -155,7 +147,7 @@ global torus: true {
 			flies_in_non_host <- tree where (each.fruit_quality = "non") sum_of (each.nb_flies_inside_tree);
 			flies_in_poor_host <- tree where (each.fruit_quality = "poor") sum_of (each.nb_flies_inside_tree);
 			flies_in_average_host <- tree where (each.fruit_quality = "average") sum_of (each.nb_flies_inside_tree);
-			flies_in_good_host <- tree where (each.fruit_quality = "good") sum_of (each.nb_flies_inside_tree); //// This code is for saving time step values during the batch runs
+			flies_in_good_host <- tree where (each.fruit_quality = "good") sum_of (each.nb_flies_inside_tree);
 		 	
 		 	total_lf_fecundity_poor <- fly where(each.my_larval_host = "poor") sum_of (each.cumulative_fecundity);
 		 	total_lf_fecundity_average <- fly where(each.my_larval_host = "average") sum_of (each.cumulative_fecundity);
@@ -177,7 +169,8 @@ global torus: true {
  		//do die;
 	}
  	
- 	// Save code at each time step (from .csv file) for the experiments
+ 	/* SAVING FILES
+ 	 * Save code at each time step (from .csv file) for the experiments */ 
  	reflex save when: run_experiments = true {
 		save 
 		[
@@ -530,21 +523,19 @@ species fly skills: [moving] control: fsm {
  	float adult_age;
 	float mortality_chance;
 	float prob_lay_eggs;
-	int counter <- 0;
+	int counter;
 	int memory_count;
 	string current_affiliated_fruit;
 	float wing_length;
-	float sensing_boundary <- 10#m;
 	float step_distance;
 	float searching_boundary;
-	float cumulative_distance;
+	float cumulative_distance;						// includes immature cumulative distance
 	float imm_cumulative_distance;
 	
-	/* LISTS for evaluating foraging
-	 */
-	list<tree> fruiting_trees; // where the trees are fruiting	
-	list<tree> distant_fruiting_trees; //where trees are fruiting within thier searching boundary
- 	list<tree> affiliated_fruit_within_boundary;  // Memory component
+	/* LISTS for evaluating foraging */
+	list<tree> fruiting_trees; 						// List of trees fruiting	
+	list<tree> distant_fruiting_trees; 				// List of trees fruiting within searching boundary
+ 	list<tree> affiliated_fruit_within_boundary;  	// List of affiliated trees: Memory component
  	
  	/* Calculating the functions for 
  	 * distance, survival, mortality, and daily eggs
@@ -560,23 +551,23 @@ species fly skills: [moving] control: fsm {
  	//float compute_sd_of_eggs {return (0.1 * daily_fecundity);} 
  
  
- 	// STATES 
+ 	/*** STATES ***/  
 	state immature_adult initial: true {
 		enter {
 			ask tree overlapping self {
 				myself.myTree <- self;  					/* The name of the tree that it is on */
 			} 
 			if run_experiments = true {
-		if my_larval_host = "poor" {
- 		wing_length <- gauss(5, 0.25);
- 			}
- 		if my_larval_host = "average" {
- 		wing_length <- gauss(5.5, 0.25);
- 			}
- 		if my_larval_host = "good" {
- 		wing_length <- gauss(6, 0.25);
- 				}
- 		searching_boundary <- compute_distance_function();	/* The distance function requires wing length to evaluate */
+				if my_larval_host = "poor" {
+		 		wing_length <- gauss(5, 0.25);
+		 			}
+		 		if my_larval_host = "average" {
+		 		wing_length <- gauss(5.5, 0.25);
+		 			}
+		 		if my_larval_host = "good" {
+		 		wing_length <- gauss(6, 0.25);
+		 				}
+		 		searching_boundary <- compute_distance_function();	/* The distance function requires wing length to evaluate */
  			}
  		if run_experiments = false {
  			searching_boundary <- sensitivity_compute_distance_function();
@@ -595,7 +586,7 @@ species fly skills: [moving] control: fsm {
 
 	state adult {
 		
-		enter { /*  */
+		enter { /* Fixed parameters */
 		if my_larval_host = "good" {
  	 		xmid <- 137.0;				/*survival parameters*/
 			L <- 100.0;  				/*survival parameters*/
@@ -672,11 +663,10 @@ species fly skills: [moving] control: fsm {
 		transition to: adult when: current_date = date(current_date.year, 8, 24);
 	}
 	
-	/// REFLEXES ///
+	/*** REFLEXES ***/
 	
-	/* DIE
-	 */
-	reflex chance_to_die when: (flip(mortality_chance)) {
+	/* Save fly information and DIE */
+	reflex chance_to_die when: flip(mortality_chance) {
 		nb_adults <- nb_adults - 1;
 		save (string(cycle) + 
 		"," + host + 
@@ -691,15 +681,13 @@ species fly skills: [moving] control: fsm {
 		do die; 
 	}
 	
-	/* Update age
-	 */
+	/* Update age */
 	reflex update_age {
  		age <- age + 1;
  	}
  	
- 	/* Memory and affiliation
-	 */ 
- 	reflex new_affiliated_host when: memory = true and (memory_count <= 0) and (myTree.num_fruit_in_list>=1) {
+ 	/* Memory and affiliation */ 
+ 	reflex new_affiliated_host when: memory = true and (memory_count = 0) and (myTree.num_fruit_in_list >= 1) {
 		if current_tree_quality = "poor" {
 			memory_count <- 2;
 			current_affiliated_fruit <- "poor";
@@ -716,7 +704,7 @@ species fly skills: [moving] control: fsm {
 		}
 	}
  	
-	//// ACTIONS ////
+	/*** ACTIONS ***/
 	
 	action update_tree_quality {
  	 	current_tree_quality <- myTree.fruit_quality;
@@ -750,12 +738,14 @@ species fly skills: [moving] control: fsm {
 	action directed_move {
  			fruiting_trees <- (tree where (each.num_fruit_in_list>= 1)) at_distance searching_boundary;	
  			distant_fruiting_trees <- (tree where (each.num_fruit_in_list>= 1)) at_distance searching_boundary;
- 			// SENSING BOUNDARY
+ 		
+ 		/* MOVE within SENSING BOUNDARY */ 
 			if !empty(fruiting_trees) {
 				do move speed: sensing_boundary #m / #s bounds: circle(sensing_boundary, location);
 			    do evaluate_boundary;
 				} 
-			// MOVE TO SEARCHING BOUNDARY
+		
+		/* MOVE within SEARCHING BOUNDARY */ 
 			if empty(fruiting_trees) and !empty(distant_fruiting_trees) {
 				do move speed: searching_boundary #m / #s bounds: circle(searching_boundary, location);
 			    do evaluate_boundary;
@@ -839,7 +829,8 @@ species fly skills: [moving] control: fsm {
 					prob_lay_eggs <- 0.0;
 					daily_fecundity <- 0;
 					}
-		// POOR //
+					
+	/* POOR fruit egg laying response */
 		if sum_list_of_fruit > 0 and current_tree_quality = "poor" {
 				int remaining_fecundity <- daily_fecundity;
 				
@@ -869,7 +860,7 @@ species fly skills: [moving] control: fsm {
 					}	
 				}
 				
-		// AVERAGE //	
+	/* AVERAGE fruit egg laying response */	
 			if sum_list_of_fruit > 0 and current_tree_quality = "average" { // then probability to lay eggs based on ave_larval_density
 				int remaining_fecundity <- daily_fecundity;
 				float ave_larval_density;
@@ -916,7 +907,7 @@ species fly skills: [moving] control: fsm {
 						}	
 					}	
 				}
-		// GOOD //	
+	/* GOOD fruit egg laying response */	
 			if sum_list_of_fruit > 0 and current_tree_quality = "good" {
 				int remaining_fecundity <- daily_fecundity;
 				
@@ -958,7 +949,7 @@ species fly skills: [moving] control: fsm {
 	 */
 	aspect default {
 		draw circle(searching_boundary) color: #pink empty: true;
-		draw circle(sensing_boundary) color: #red empty: true;
+		draw circle(sensing_boundary) color: #lightpink empty: true;
 		draw circle(0.3) color: #red;
 	}
 }
@@ -987,7 +978,7 @@ species cohort control: fsm {
 	}
 
 	aspect default {
-		draw circle(0.2) color: #lightpink border: #gray;
+		draw circle(0.2) color: #yellow border: #gray;
 	}
 	
  	action assign_tree_quality {
@@ -998,7 +989,6 @@ species cohort control: fsm {
 			pupal_mortality <- gauss(0.30, 0.15);  
 			days_in_L_stage <- round(gauss(13, 2));  
 			days_in_P_stage <- round(gauss(13, 2)); 
-			
 			}
 		}
 
@@ -1009,18 +999,16 @@ species cohort control: fsm {
 			pupal_mortality <- gauss(0.103, 0.10);
 			days_in_L_stage <- round(gauss(11, 2));
 			days_in_P_stage <- round(gauss(13, 2));
-			
 			}
 		}
 
 		if my_larval_host = "good" {
 			if run_experiments = true {
 			egg_mortality <- gauss(0.115, 0.089);
-			larval_mortality <- gauss(0.385, 0.15); //TODO undo for experiments
+			larval_mortality <- gauss(0.385, 0.15);
 			pupal_mortality <- gauss(0.057, 0.05);
 			days_in_L_stage <- round(gauss(8, 0.60));
 			days_in_P_stage <- round(gauss(13, 2));
-			
 			}
 		}
 		
@@ -1029,12 +1017,11 @@ species cohort control: fsm {
 				pupal_mortality <- sensitivity_pupal_mortality;
 				days_in_L_stage <- sensitivity_days_in_L_stage;
 				days_in_P_stage <- sensitivity_days_in_P_stage;
-			}
+		}
 	}
 	
 	/*
-	 * Chance of the emerge flies to be male and die 
-	 * as males are not the focus of this model
+	 * Chance of the emerge flies to be male and die as males are not the focus of this model
 	 */
  	action remove_males {
 		if (flip(0.5)) {
@@ -1083,8 +1070,12 @@ species cohort control: fsm {
 			
 		exit {
 			if nb_cohort > 0 {
-			loop i from: 1 to: nb_cohort { // The density mortality is based on what has already transitioned to pupae, teneral and emerged. This is to make sure that the initial cohorts make it through the life cycle first. 
-				// As there was a tendancy that with very high larvae in a cohort they would end up with nothing and so during the second season in some cases there would be no flies emerging, as all the larvae would die.
+				/* The density mortality is based on what has already transitioned to teneral and emerged. 
+				 This is to make sure that the initial cohorts make it through the life cycle first. 
+				 As there was a tendancy that with very high larvae in a cohort they would end up with 
+				 nothing and so during the second season in some cases there would be no flies emerging, as all the larvae would die. */
+				 
+			loop i from: 1 to: nb_cohort { 
 				density_mortality <- (my_larval_tree.emerged + my_larval_tree.nb_teneral_in_tree)/(my_larval_tree.max_capacity);
 				combined_mortality <- 1-((1-larval_mortality)*(1-density_mortality));
 					if flip(combined_mortality) {
@@ -1137,7 +1128,6 @@ species cohort control: fsm {
 				my_pupal_mortality_chance <- myself.pupal_mortality;
 				my_larval_development_time <- myself.days_in_L_stage;
 				my_pupal_development_time <- myself.days_in_P_stage;
-				// take out the myself.___ for mortality and days in each stage when running sensitivity analysis
  				nb_adults <- nb_adults + 1;
  				nb_adult_total <- nb_adult_total + 1;
 				}
