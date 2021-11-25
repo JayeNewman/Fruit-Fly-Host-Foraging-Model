@@ -13,7 +13,7 @@ model FSFMv2
 global torus: true {
 	
 	//file grid_map <- file("C:/Users/newma/gama_workspace/Foraging_model_with_size/includes/single_fruit_5p.asc");
-	file grid_map <- file("C:/Users/newma/gama_workspace/Foraging_model_with_size/includes/a30p60.asc");
+	file grid_map <- file("C:/Users/newma/gama_workspace/Foraging_model_with_size/includes/single_fruit_5p.asc");
 	file proba_stay_tree <- csv_file("../includes/proba_of_staying_tree.csv", ","); 
 	//file grid_map;  			/* generic when multiple maps are utilised in the experiments */
 	geometry shape <- envelope(grid_map);
@@ -29,15 +29,15 @@ global torus: true {
 	int mature_age <- 10;							/* Fly parameter */
 	float sensing_boundary <- 10#m;					/* Fly parameter */
 	int number_acceptable_larval_encounters <- 5; 	/* Fly parameter: number of times fruit with larvae can be encountered before they leave the tree */
-	bool memory <- true;							/* Fly parameter */
-	bool simultaneous_season <- true; 				/* Tree parameter */
+	bool memory <- false;							/* Fly parameter */
+	bool simultaneous_season <- false; 				/* Tree parameter */
 	string global_path_file_name <- "../data/results/global.csv";	/* Global parameter naming file */
 	
-	bool run_experiments <- true;			/* Global parameter: When false sets up model for sensitivity analysis of one fruit host */
+	bool run_experiments <- false;			/* Global parameter: When false sets up model for sensitivity analysis of one fruit host */
 	
-	string sensitivity_fruit <- "average"; 	/* The fruit that the sensitivity analysis will define */ 
+	string sensitivity_fruit <- "poor"; 	/* The fruit that the sensitivity analysis will define */ 
 	int sensitivity_max_larvae_per_fruit <- 10; 		/* Tree grid parameter for sensitivity analysis in the "run_experiments = false" in the global environment. */ 
-	string sensitivity_global_path_file_name <- "../data/results/sensitivity_global_test.csv";	/* Global parameter naming file */
+	string sensitivity_global_path_file_name <- "../data/results/sensitivity_global_poor_2021_11_25.csv";	/* Global parameter naming file */
  
  	/* Cohort parameters 
  	 * To set for sensitivity analysis "run_experiments = false" in the global environment. */ 
@@ -535,7 +535,7 @@ species fly skills: [moving] control: fsm {
 	/* LISTS for evaluating foraging */
 	list<tree> fruiting_trees; 						// List of trees fruiting	
 	list<tree> distant_fruiting_trees; 				// List of trees fruiting within searching boundary
- 	list<tree> affiliated_fruit_within_boundary;  	// List of affiliated trees: Memory component
+ 	list<tree> affiliated_fruit_within_sensing_boundary;  	// List of affiliated trees: Memory component
  	
  	/* Calculating the functions for 
  	 * distance, survival, mortality, and daily eggs
@@ -645,11 +645,9 @@ species fly skills: [moving] control: fsm {
 		
 		/* The only action for movement. Contains directed and simple wander. */
 		do probability_to_stay;
-		write name + " do prob stay:  current aff host " + current_affiliated_fruit_host + " " + myTree;
 
 		/* final action to perform as it determines the probability of the flies laying eggs. */ 
 		do probability_to_lay_eggs_in_tree; 
-		write name + " do prob lay eggs" + "  current aff host " + current_affiliated_fruit_host + " " + myTree;
 		
 		/* update number of days in hosts */
 		do calculate_days_in_hosts;
@@ -680,7 +678,7 @@ species fly skills: [moving] control: fsm {
 		"," + searching_boundary + 
 		"," + imm_cumulative_distance +
 		"," + cumulative_distance)
-		to: "../data/results/sensitivity_test.csv" type: "csv" header:true rewrite: false;
+		to: "../data/results/sensitivity_fly_poor_2021_11_25.csv" type: "csv" header:true rewrite: false;
 		do die; 
 	}
 	
@@ -690,8 +688,7 @@ species fly skills: [moving] control: fsm {
  	}
  	
  	/* Memory and affiliation */ 
- 	reflex new_affiliated_host when: memory = true and memory_count <= 0 and myTree.num_fruit_in_list >= 1 {
- 		write name +"current affiliated fruit (new affiliated fruit)" + current_affiliated_fruit_host;
+ 	reflex new_affiliated_host when: memory = true and myTree.num_fruit_in_list >= 1 {
 		if current_tree_quality = "poor" {
 			memory_count <- 2;
 			current_affiliated_fruit_host <- "poor";
@@ -713,26 +710,12 @@ species fly skills: [moving] control: fsm {
 	
 	action update_tree_quality {
  	 	current_tree_quality <- myTree.fruit_quality;
- 	 	write name + " update tree quality " + myTree.fruit_quality + " my tree " +myTree;
  	 }
  	 
  	 action update_lists {
-			fruiting_trees <- tree at_distance sensing_boundary where (each.num_fruit_in_list>= 1);
-			distant_fruiting_trees <- (tree where (each.num_fruit_in_list>= 1)) at_distance searching_boundary;
-			affiliated_fruit_within_boundary <- fruiting_trees where (each.fruit_quality = current_affiliated_fruit_host);
+				affiliated_fruit_within_sensing_boundary <- fruiting_trees where (each.fruit_quality = current_affiliated_fruit_host);
 		}
- 	 
- 	 action evaluate_boundary {
- 	 	tree maxtree <- fruiting_trees with_max_of (each.grid_value);
-		float maxquality <- maxtree.grid_value; 
-		tree bestTree <- shuffle(fruiting_trees) first_with (each.grid_value = maxquality);
-		location <- bestTree.location;
-		step_distance <- myTree distance_to(location);
-		cumulative_distance <- cumulative_distance + step_distance;
-		myTree <- bestTree;
-		
-		write name + " 1 evaluate boundary " + myTree.fruit_quality + " aff fruit host " + current_affiliated_fruit_host + " " +myTree;
- 	 }
+ 
  	 
 	/* Movement
 	 */
@@ -744,44 +727,52 @@ species fly skills: [moving] control: fsm {
 		ask tree overlapping self {
 				myself.myTree <- self;
 				}
-		write name + " simple wander (simple_wander) " + myTree.fruit_quality + " aff fruit host " + current_affiliated_fruit_host + " "+ myTree;
+				write name + " 3 SIM W " + myTree;
  		} 	
  		
  	/*  Directed move is based on OPTIMAL FORAGING / BEST CHOICE BEHAVIOUR. 
 	 * The highest grid value within the sensing boundary is selected
 	 */	
 	action directed_move {
- 			fruiting_trees <- (tree where (each.num_fruit_in_list>= 1)) at_distance searching_boundary;	
+ 			fruiting_trees <- (tree where (each.num_fruit_in_list>= 1)) at_distance sensing_boundary;	
  			distant_fruiting_trees <- (tree where (each.num_fruit_in_list>= 1)) at_distance searching_boundary;
  		
  		/* MOVE within SENSING BOUNDARY */ 
 			if !empty(fruiting_trees) {
 				do move speed: sensing_boundary #m / #s bounds: circle(sensing_boundary, location);
-			    do evaluate_boundary;
-			    write name + " moved within sensing boundary (directed_move)" + myTree.fruit_quality + " aff fruit host: " + current_affiliated_fruit_host + " " + myTree;
+			     	 	tree maxtree <- fruiting_trees with_max_of (each.grid_value);
+						float maxquality <- maxtree.grid_value; 
+						tree bestTree <- shuffle(fruiting_trees) first_with (each.grid_value = maxquality);
+						location <- bestTree.location;
+						step_distance <- myTree distance_to(location);
+						cumulative_distance <- cumulative_distance + step_distance;
+						myTree <- bestTree;
+						location <- myTree.location;
 				} 
 		
 		/* MOVE within SEARCHING BOUNDARY */ 
 			if empty(fruiting_trees) and !empty(distant_fruiting_trees) {
 				do move speed: searching_boundary #m / #s bounds: circle(searching_boundary, location);
-			    do evaluate_boundary;
-			    write name +" moved within searching boundary (directed_move)" + myTree.fruit_quality + " aff fruit host: " + current_affiliated_fruit_host + " " + myTree;
+			     	 	tree maxtree <- distant_fruiting_trees with_max_of (each.grid_value);
+						float maxquality <- maxtree.grid_value; 
+						tree bestTree <- shuffle(distant_fruiting_trees) first_with (each.grid_value = maxquality);
+						location <- bestTree.location;
+						step_distance <- myTree distance_to(location);
+						cumulative_distance <- cumulative_distance + step_distance;
+						myTree <- bestTree;
+						location <- myTree.location;
 				} 
 			if empty(fruiting_trees) and empty(distant_fruiting_trees) {
 					do simple_wander;
-					write name + " simple wander (within directed move)" + myTree.fruit_quality + " aff fruit host: " + current_affiliated_fruit_host + " " + myTree;
 				}
 		}
 		
 	action move_to_affiliated { 
 		ask tree overlapping self {
 			myself.myTree <- self;
-			write fruit_quality + " " + name;
 		}
-		write name +" before affiliated tree " + current_affiliated_fruit_host + " my trees fruit quality " + myTree.fruit_quality + " " + myTree;
-		myTree <- one_of(affiliated_fruit_within_boundary);
+		myTree <- one_of(affiliated_fruit_within_sensing_boundary);
 		location <- myTree.location;
-		write name + " after affiliated tree " + current_affiliated_fruit_host + " my trees fruit quality " + myTree.fruit_quality + " " + myTree;
 	}
 	
 	action counter_ticker {
@@ -793,49 +784,42 @@ species fly skills: [moving] control: fsm {
 				}
 	
 	action probability_to_stay {
-		if memory = true and length(affiliated_fruit_within_boundary) >= 1 and current_affiliated_fruit_host = "poor" {
+		if memory = true and length(affiliated_fruit_within_sensing_boundary) >= 1 and current_affiliated_fruit_host = "poor" {
 			float my_exp_1 <- memory_prob_1 at counter;
 			if (flip(my_exp_1)) {
 					do move_to_affiliated;
-					write name + " affiliated move within prob to stay POOR " + " aff fruit "+ current_affiliated_fruit_host + myTree;
 					memory_count <- 3;
 					counter <- 1;
 			} else {
 				do directed_move;
-				write name + " ELSE probability to stay poor" + " aff fruit "+ current_affiliated_fruit_host + myTree;
 				do counter_ticker;
 			}
 		}
-		if memory = true and length(affiliated_fruit_within_boundary) >= 1 and current_affiliated_fruit_host = "average" {
+		if memory = true and length(affiliated_fruit_within_sensing_boundary) >= 1 and current_affiliated_fruit_host = "average" {
 			float my_exp_2 <- memory_prob_2 at counter;
 			if (flip(my_exp_2)) {
 				do move_to_affiliated;
-				write name + " affiliated move within prob to stay AVE:" + " aff fruit "+ current_affiliated_fruit_host + myTree;
 				memory_count <- 3;
 				counter <- 1;
 				
 			} else {
 				do directed_move;
-				write name + " ELSE probability to stay average:" + " aff fruit "+ current_affiliated_fruit_host + myTree;
 				do counter_ticker;
 			}
 		}
-		if memory = true and length(affiliated_fruit_within_boundary) >= 1 and current_affiliated_fruit_host = "good" {
+		if memory = true and length(affiliated_fruit_within_sensing_boundary) >= 1 and current_affiliated_fruit_host = "good" {
 			float my_exp_3 <- memory_prob_3 at counter;
 			if (flip(my_exp_3)) {
 	 			do move_to_affiliated;
-	 				write name + " affiliated move within prob to stay good: " + " aff fruit "+ current_affiliated_fruit_host + myTree;
 					memory_count <- 4;
 					counter <- 1;
 			} else {
 				do directed_move;
-				write name + " ELSE probability to stay good:" + " aff fruit "+ current_affiliated_fruit_host + myTree;
 				do counter_ticker;
 				}
 			} 
-			if memory = true and length(affiliated_fruit_within_boundary) <= 0 {
+			if memory = true and length(affiliated_fruit_within_sensing_boundary) <= 0 {
 				do directed_move;
-				write name +" the else move ";
 			}
 			if memory = false {
 				do directed_move;
@@ -845,8 +829,8 @@ species fly skills: [moving] control: fsm {
     /* Probability that the female will lay eggs in fruit in the tree
      */
 		action probability_to_lay_eggs_in_tree {
-		int larval_encounter <- 0;	
-		int sum_list_of_fruit <- length(myTree.list_of_fruit);
+			int larval_encounter <- 0;	
+			int sum_list_of_fruit <- length(myTree.list_of_fruit);
 			
 		if current_tree_quality = "non" {
 					prob_lay_eggs <- 0.0;
@@ -868,7 +852,6 @@ species fly skills: [moving] control: fsm {
 						larval_encounter <- larval_encounter + 1;
 						if larval_encounter > number_acceptable_larval_encounters {
 							do probability_to_stay;
-							write name + " POOR too many larvae I'm not laying eggs " + myTree;
 							daily_fecundity <- 0;
 							remaining_fecundity <- 0;
 						}
@@ -911,7 +894,6 @@ species fly skills: [moving] control: fsm {
 							
 							if larval_encounter > number_acceptable_larval_encounters {
 								do probability_to_stay;
-								write name + " AVERAGE too many larvae I'm not laying eggs " + myTree;
 								daily_fecundity <- 0;
 								remaining_fecundity <- 0;
 							}
@@ -978,7 +960,6 @@ species fly skills: [moving] control: fsm {
 		draw circle(0.3) color: #red;
 	}
 }
-
 
 
 species cohort control: fsm {
@@ -1206,17 +1187,17 @@ experiment multiple_maps type: gui {
 experiment importFromCSV type: gui {
 
 	action _init_ {
-		csv_file size_csv_file <- csv_file("../models/includes/afas_parameters.csv", ",", false);
+		csv_file size_csv_file <- csv_file("../models/includes/ffas_0to400_2021_10_05.csv", ",", false);
 		matrix data <- matrix(size_csv_file);
 		write data;
 		loop i from: 0 to: data.rows -1 {  // 19
 			create simulation with: [
 				// max_larvae_per_fruit::int(data[0,i]),
-				sensitivity_wing_length::float(data[1,i]),
-				sensitivity_larval_mortality::float(data[2, i]), 
-				sensitivity_pupal_mortality::float(data[3, i]), 
-				sensitivity_days_in_L_stage::int(data[4, i]), 
-				sensitivity_days_in_P_stage::int(data[5, i])
+				sensitivity_wing_length::float(data[0,i]),
+				sensitivity_larval_mortality::float(data[1, i]), 
+				sensitivity_pupal_mortality::float(data[2, i]), 
+				sensitivity_days_in_L_stage::int(data[3, i]), 
+				sensitivity_days_in_P_stage::int(data[4, i])
 			];
 		}
 	}
