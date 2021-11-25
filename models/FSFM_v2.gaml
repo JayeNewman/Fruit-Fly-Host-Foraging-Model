@@ -525,7 +525,7 @@ species fly skills: [moving] control: fsm {
 	float prob_lay_eggs;
 	int counter;
 	int memory_count;
-	string current_affiliated_fruit;
+	string current_affiliated_fruit_host;
 	float wing_length;
 	float step_distance;
 	float searching_boundary;
@@ -576,8 +576,8 @@ species fly skills: [moving] control: fsm {
 		
 		adult_age <- adult_age + (step/86400);
 		do update_tree_quality;
-		imm_cumulative_distance <- cumulative_distance;
 		do simple_wander;
+		imm_cumulative_distance <- cumulative_distance;
 		daily_fecundity <- 0; 
 
 		transition to: adult when: adult_age >= mature_age;
@@ -619,6 +619,7 @@ species fly skills: [moving] control: fsm {
 		adult_age <- adult_age + (step/86400);
 		
 		do update_tree_quality;
+		do update_lists;
 		
 		if my_larval_host = "average" {
 			mortality_chance <- compute_mortality_chance(compute_survival_curve());
@@ -644,9 +645,11 @@ species fly skills: [moving] control: fsm {
 		
 		/* The only action for movement. Contains directed and simple wander. */
 		do probability_to_stay;
+		write name + " do prob stay:  current aff host " + current_affiliated_fruit_host + " " + myTree;
 
 		/* final action to perform as it determines the probability of the flies laying eggs. */ 
 		do probability_to_lay_eggs_in_tree; 
+		write name + " do prob lay eggs" + "  current aff host " + current_affiliated_fruit_host + " " + myTree;
 		
 		/* update number of days in hosts */
 		do calculate_days_in_hosts;
@@ -687,28 +690,37 @@ species fly skills: [moving] control: fsm {
  	}
  	
  	/* Memory and affiliation */ 
- 	reflex new_affiliated_host when: memory = true and (memory_count = 0) and (myTree.num_fruit_in_list >= 1) {
+ 	reflex new_affiliated_host when: memory = true and memory_count <= 0 and myTree.num_fruit_in_list >= 1 {
+ 		write name +"current affiliated fruit (new affiliated fruit)" + current_affiliated_fruit_host;
 		if current_tree_quality = "poor" {
 			memory_count <- 2;
-			current_affiliated_fruit <- "poor";
+			current_affiliated_fruit_host <- "poor";
 		}
 
 		if current_tree_quality = "average" {
 			memory_count <- 3;
-			current_affiliated_fruit <- "average";
+			current_affiliated_fruit_host <- "average";
 		}
 
 		if current_tree_quality = "good" {
 			memory_count <- 4;
-			current_affiliated_fruit <- "good";
+			current_affiliated_fruit_host <- "good";
 		}
 	}
+
  	
 	/*** ACTIONS ***/
 	
 	action update_tree_quality {
  	 	current_tree_quality <- myTree.fruit_quality;
+ 	 	write name + " update tree quality " + myTree.fruit_quality + " my tree " +myTree;
  	 }
+ 	 
+ 	 action update_lists {
+			fruiting_trees <- tree at_distance sensing_boundary where (each.num_fruit_in_list>= 1);
+			distant_fruiting_trees <- (tree where (each.num_fruit_in_list>= 1)) at_distance searching_boundary;
+			affiliated_fruit_within_boundary <- fruiting_trees where (each.fruit_quality = current_affiliated_fruit_host);
+		}
  	 
  	 action evaluate_boundary {
  	 	tree maxtree <- fruiting_trees with_max_of (each.grid_value);
@@ -718,6 +730,8 @@ species fly skills: [moving] control: fsm {
 		step_distance <- myTree distance_to(location);
 		cumulative_distance <- cumulative_distance + step_distance;
 		myTree <- bestTree;
+		
+		write name + " 1 evaluate boundary " + myTree.fruit_quality + " aff fruit host " + current_affiliated_fruit_host + " " +myTree;
  	 }
  	 
 	/* Movement
@@ -730,6 +744,7 @@ species fly skills: [moving] control: fsm {
 		ask tree overlapping self {
 				myself.myTree <- self;
 				}
+		write name + " simple wander (simple_wander) " + myTree.fruit_quality + " aff fruit host " + current_affiliated_fruit_host + " "+ myTree;
  		} 	
  		
  	/*  Directed move is based on OPTIMAL FORAGING / BEST CHOICE BEHAVIOUR. 
@@ -743,81 +758,89 @@ species fly skills: [moving] control: fsm {
 			if !empty(fruiting_trees) {
 				do move speed: sensing_boundary #m / #s bounds: circle(sensing_boundary, location);
 			    do evaluate_boundary;
+			    write name + " moved within sensing boundary (directed_move)" + myTree.fruit_quality + " aff fruit host: " + current_affiliated_fruit_host + " " + myTree;
 				} 
 		
 		/* MOVE within SEARCHING BOUNDARY */ 
 			if empty(fruiting_trees) and !empty(distant_fruiting_trees) {
 				do move speed: searching_boundary #m / #s bounds: circle(searching_boundary, location);
 			    do evaluate_boundary;
+			    write name +" moved within searching boundary (directed_move)" + myTree.fruit_quality + " aff fruit host: " + current_affiliated_fruit_host + " " + myTree;
 				} 
 			if empty(fruiting_trees) and empty(distant_fruiting_trees) {
 					do simple_wander;
+					write name + " simple wander (within directed move)" + myTree.fruit_quality + " aff fruit host: " + current_affiliated_fruit_host + " " + myTree;
 				}
 		}
 		
 	action move_to_affiliated { 
 		ask tree overlapping self {
 			myself.myTree <- self;
+			write fruit_quality + " " + name;
 		}
-		fruiting_trees <- tree at_distance sensing_boundary where (each.num_fruit_in_list>= 1);
-		affiliated_fruit_within_boundary <- fruiting_trees where (each.fruit_quality = current_affiliated_fruit);
-		if !empty(affiliated_fruit_within_boundary) {
-			myTree <- one_of(fruiting_trees);
-			location <- myTree.location;
-		} else {
-			do directed_move;
-		}
+		write name +" before affiliated tree " + current_affiliated_fruit_host + " my trees fruit quality " + myTree.fruit_quality + " " + myTree;
+		myTree <- one_of(affiliated_fruit_within_boundary);
+		location <- myTree.location;
+		write name + " after affiliated tree " + current_affiliated_fruit_host + " my trees fruit quality " + myTree.fruit_quality + " " + myTree;
 	}
 	
-	action probability_to_stay {
-		if memory = true and current_affiliated_fruit = "poor" {
-			float my_exp_1 <- memory_prob_1 at counter;
-			if (flip(my_exp_1)) {
-				do move_to_affiliated;
-				memory_count <- 3;
-				counter <- 1;
-			} else {
-				do directed_move;
-				memory_count <- memory_count - 1;
+	action counter_ticker {
+		memory_count <- memory_count - 1;
 				counter <- counter + 1;
 				if counter > 4 {
 					counter <- 5;
+					}
 				}
+	
+	action probability_to_stay {
+		if memory = true and length(affiliated_fruit_within_boundary) >= 1 and current_affiliated_fruit_host = "poor" {
+			float my_exp_1 <- memory_prob_1 at counter;
+			if (flip(my_exp_1)) {
+					do move_to_affiliated;
+					write name + " affiliated move within prob to stay POOR " + " aff fruit "+ current_affiliated_fruit_host + myTree;
+					memory_count <- 3;
+					counter <- 1;
+			} else {
+				do directed_move;
+				write name + " ELSE probability to stay poor" + " aff fruit "+ current_affiliated_fruit_host + myTree;
+				do counter_ticker;
 			}
 		}
-		if memory = true and current_affiliated_fruit = "average" {
+		if memory = true and length(affiliated_fruit_within_boundary) >= 1 and current_affiliated_fruit_host = "average" {
 			float my_exp_2 <- memory_prob_2 at counter;
 			if (flip(my_exp_2)) {
 				do move_to_affiliated;
+				write name + " affiliated move within prob to stay AVE:" + " aff fruit "+ current_affiliated_fruit_host + myTree;
 				memory_count <- 3;
 				counter <- 1;
+				
 			} else {
 				do directed_move;
-				memory_count <- memory_count - 1;
-				counter <- counter + 1;
-				if counter > 4 {
-					counter <- 5;
-				}
+				write name + " ELSE probability to stay average:" + " aff fruit "+ current_affiliated_fruit_host + myTree;
+				do counter_ticker;
 			}
 		}
-		if memory = true and current_affiliated_fruit = "good" {
+		if memory = true and length(affiliated_fruit_within_boundary) >= 1 and current_affiliated_fruit_host = "good" {
 			float my_exp_3 <- memory_prob_3 at counter;
 			if (flip(my_exp_3)) {
- 			do move_to_affiliated;
-				memory_count <- 4;
-				counter <- 1;
+	 			do move_to_affiliated;
+	 				write name + " affiliated move within prob to stay good: " + " aff fruit "+ current_affiliated_fruit_host + myTree;
+					memory_count <- 4;
+					counter <- 1;
 			} else {
 				do directed_move;
-				memory_count <- memory_count - 1;
-				counter <- counter + 1;
-				if counter > 4 {
-					counter <- 5;
+				write name + " ELSE probability to stay good:" + " aff fruit "+ current_affiliated_fruit_host + myTree;
+				do counter_ticker;
 				}
+			} 
+			if memory = true and length(affiliated_fruit_within_boundary) <= 0 {
+				do directed_move;
+				write name +" the else move ";
 			}
-		} else {
-			do directed_move;
+			if memory = false {
+				do directed_move;
+			}
 		}
-	}
  
     /* Probability that the female will lay eggs in fruit in the tree
      */
@@ -845,6 +868,7 @@ species fly skills: [moving] control: fsm {
 						larval_encounter <- larval_encounter + 1;
 						if larval_encounter > number_acceptable_larval_encounters {
 							do probability_to_stay;
+							write name + " POOR too many larvae I'm not laying eggs " + myTree;
 							daily_fecundity <- 0;
 							remaining_fecundity <- 0;
 						}
@@ -887,6 +911,7 @@ species fly skills: [moving] control: fsm {
 							
 							if larval_encounter > number_acceptable_larval_encounters {
 								do probability_to_stay;
+								write name + " AVERAGE too many larvae I'm not laying eggs " + myTree;
 								daily_fecundity <- 0;
 								remaining_fecundity <- 0;
 							}
