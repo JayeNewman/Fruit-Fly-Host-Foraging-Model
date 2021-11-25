@@ -1,50 +1,58 @@
 /**
-* Name: FSMF
-* Based on Foraging Size Memory [FSM] model. Here fruits are introduced as a species in the model. 
+* Name: FSFMv2
+* Based on the internal empty template. 
 * Author: newma
 * Tags: 
 */
 
 
-model FSMF
+model FSFMv2
 
 /* Insert your model definition here */
 
 global torus: true {
 	
-	file grid_map <- file("C:/Users/newma/gama_workspace/Foraging_model_with_size/includes/single_fruit_5p.asc");
+	//file grid_map <- file("C:/Users/newma/gama_workspace/Foraging_model_with_size/includes/single_fruit_5p.asc");
+	file grid_map <- file("C:/Users/newma/gama_workspace/Foraging_model_with_size/includes/a30p60.asc");
 	file proba_stay_tree <- csv_file("../includes/proba_of_staying_tree.csv", ","); 
-	//file grid_map;  // generic when multiple maps are utilised in the experiments
+	//file grid_map;  	/* generic when multiple maps are utilised in the experiments */
 	geometry shape <- envelope(grid_map);
-	string map_name;
+	string map_name;	/* For batch experiments that have multiple maps */
  	date starting_date <- date(2020, 8, 24);
- 	int nb_fly <- 5;
+ 	float step <- 1 #day;
  	int max_flies <- 0;
  	int nb_adult_total <- 0;
-	float step <- 1 #day;
-	bool memory <- true;
-	bool simultaneous_season <- false;
-	bool run_experiments <- false;
+
+	
+	/* INPUT PARAMETERS */
+	int nb_fly <- 5;						/* Fly parameter */
+	int mature_age <- 10;					/* Fly parameter */
+	bool memory <- true;					/* Fly parameter */
+	bool simultaneous_season <- true; 		/* Tree parameter */
+	string global_path_file_name <- "../data/results/global.csv";	/* Global parameter naming file */
+	
+	bool run_experiments <- true;			/* Global parameter: When false sets up model for sensitivity analysis of one fruit host */
+	
+	string sensitivity_fruit <- "average"; 	/* The fruit that the sensitivity analysis will define */ 
+	int sensitivity_max_larvae_per_fruit <- 10; 		/* Tree grid parameter for sensitivity analysis in the "run_experiments = false" in the global environment. */ 
+	string sensitivity_global_path_file_name <- "../data/results/sensitivity_global_test.csv";	/* Global parameter naming file */
  
- 	// Cohort parameters // To set for sensitivity analysis "run_experiments = false" in the global environment.
+ 	/* Cohort parameters 
+ 	 * To set for sensitivity analysis "run_experiments = false" in the global environment.
+ 	 */ 
 	float sensitivity_larval_mortality; 
 	float sensitivity_pupal_mortality;
 	int sensitivity_days_in_L_stage;
 	int sensitivity_days_in_P_stage;
-	float sensitivity_wing_length;  // TODO put this in so I dont have to mute it in the code. // Fly species parameter for sensitivity analysis in the "run_experiments = false" in the global environment.
-	int max_larvae_per_fruit; // Tree grid parameter for sensitivity analysis in the "run_experiments = false" in the global environment.
-
-	int sensitivity_max_larvae <- 10;
-	string sensitivity_fruit <- "average"; // The fruit that the sensitivity analysis will look into
+	float sensitivity_wing_length;  
 	
-	// Fly parameters
-	int mature_age <- 10;
+	/* Fly parameters */ 
+	
 	float days_in_IM_stage;
 	int daily_flies;
  	int nb_adults <- 0;
 	int nb_cohort;
-	float mortality_chance;
-	float wing_length;
+	//float mortality_chance;
 		
 	// the parameters of the weibul function for daily fecundity
  	float beta; 
@@ -131,7 +139,7 @@ global torus: true {
 	int flies_in_non_host;
 	int flies_in_poor_host;
 	int flies_in_average_host;
-	int flies_in_good_host; //// This code is for saving time step values during the batch runs
+	int flies_in_good_host; 
  	
  	int total_lf_fecundity_poor;
  	int total_lf_fecundity_average;
@@ -159,9 +167,9 @@ global torus: true {
  	int sensitivity_total_lf_fecundity;
  	
  	reflex calc_sensitivity_parameters when: run_experiments = false {
- 		sensitivity_flies_in_host <- tree where (each.fruit_quality = sensitivity_fruit) sum_of (each.num_fruit_in_list);
+ 		sensitivity_flies_in_host <- tree where (each.fruit_quality = sensitivity_fruit) sum_of (each.nb_flies_inside_tree);
  	    sensitivity_total_sensitivity_fruit <- tree where (each.fruit_quality = sensitivity_fruit) sum_of (each.num_fruit_in_list);
- 	    sensitivity_total_lf_fecundity <- fly where(each.my_larval_host = "poor") sum_of (each.cumulative_fecundity);
+ 	    sensitivity_total_lf_fecundity <- fly where(each.my_larval_host = sensitivity_fruit) sum_of (each.cumulative_fecundity);
  	}
  	
  	reflex stop_sim when: cycle = 1825 {
@@ -202,7 +210,7 @@ global torus: true {
 		total_lf_fecundity_average, 
 		total_lf_fecundity_good 
 		]
-		to: "../data/results/global.csv" type: "csv" header: true rewrite: false;
+		to: global_path_file_name type: "csv" header: true rewrite: false;
 		
  	}
  	
@@ -221,7 +229,7 @@ global torus: true {
 		current_date, 
 		daily_flies, 
 		total_all_fly_fecundity,
-		max_larvae_per_fruit,
+		sensitivity_max_larvae_per_fruit,
 		sensitivity_wing_length, 
 		sensitivity_larval_mortality, 
 		sensitivity_pupal_mortality,
@@ -230,7 +238,7 @@ global torus: true {
 		host_good_emergence, 
 		total_lf_fecundity_good
 		]
-		to: "../data/results/sensitivity_global_test.csv" type: "csv" header: true rewrite: false;
+		to: sensitivity_global_path_file_name type: "csv" header: true rewrite: false;
  	}
  	
 // 	reflex save_map {
@@ -301,7 +309,7 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 			if grid_value = 1.0 {
 			fruit_quality <- sensitivity_fruit;
 			color <- #salmon;
-			max_larvae_per_fruit <- sensitivity_max_larvae; 
+			max_larvae_per_fruit <- sensitivity_max_larvae_per_fruit; 
 			}
 		}
 	}
@@ -344,13 +352,12 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 			season_day <- season_day + (step/86400);
 			calc_fruit_on_tree <- round(a * exp(-((season_day - b) ^ 2) / (2 * (c ^ 2))));
 			}
-			
 	
-	reflex simultaneous_reduce_fruit { // if comparing simultaneous and sequential fruiting and want to compare the same number of fruits.
-		if simultaneous_season = true {
-			a <- (a/2);
-		}
-	}
+//	reflex simultaneous_reduce_fruit { 		/* if comparing simultaneous and sequential fruiting and want to compare the same number of fruits. */ 
+//		if simultaneous_season = true {
+//			a <- (a/2);
+//		}
+//	}
 	
 	reflex limit_to_extended_emergence {
 		if season_day > b and length(list_of_fruit)  < 1 {
@@ -358,31 +365,25 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 			}
 		}
 			
- 	reflex poor_tree_fruiting when: fruit_quality = "poor" {
- 		if run_experiments = true {
-		if (
-			((simultaneous_season = true) and (current_date = date(current_date.year, 1,5) or current_date = date(current_date.year, 8,25))) 
-			or
-			((simultaneous_season = false) and (current_date = date(current_date.year, 8,25))))
+ 	reflex poor_tree_fruiting when: fruit_quality = "poor" and run_experiments = true {
+		if simultaneous_season = true and (current_date = date(current_date.year, 1,5) or current_date = date(current_date.year, 8,25)) 
+		or (simultaneous_season = false and current_date = date(current_date.year, 8,25))
 			{
 			in_season <- true;
 			}
 			if in_season = true {
 				do start_season;
-			
 			if season_day > b and length(list_of_fruit)< 1 and days_fruit_fallen > 14 {
 					do reset_season;
 					}
 				}
-			}
+			
 		}
 		
 	reflex average_tree_fruiting when: fruit_quality = "average" {
 		if run_experiments = true {
-		if (
-			((simultaneous_season = true) and (current_date = date(current_date.year, 1,19) or current_date = date(current_date.year, 9,7)))
-			or 
-			((simultaneous_season = false) and (current_date = date(current_date.year, 11,12))))
+		if simultaneous_season = true and (current_date = date(current_date.year, 1,19) or current_date = date(current_date.year, 9,7))
+			or (simultaneous_season = false and current_date = date(current_date.year, 11,12))
 			{
 			in_season <- true;
 			}
@@ -398,10 +399,8 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 		
 	reflex good_tree_fruiting when: fruit_quality = "good" {
 		if run_experiments = true { 
-		if (
-			((simultaneous_season = true) and (current_date = date(current_date.year, 2,1) or current_date = date(current_date.year, 9,21)))
-			or 
-			((simultaneous_season = false) and (current_date = date(current_date.year, 2,1))))
+		if simultaneous_season = true and (current_date = date(current_date.year, 2,1) or current_date = date(current_date.year, 9,21))
+			or (simultaneous_season = false) and (current_date = date(current_date.year, 2,1))
 			{
 			in_season <- true;
 			}
@@ -416,21 +415,20 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 		}
 		
 		reflex sensitivity_fruiting when: run_experiments = false { 
-		if (((simultaneous_season = true) and (
+		if (simultaneous_season = true and (
 			current_date = date(current_date.year, 1,5) or 
 			current_date = date(current_date.year, 8,25) or
 			current_date = date(current_date.year, 2,1) or
 			current_date = date(current_date.year, 9,21) or
 			current_date = date(current_date.year, 1,19) or
 			current_date = date(current_date.year, 9,7)
-		)) 
-			
+		)
 			or
-			((simultaneous_season = false) and (
+			simultaneous_season = false and (
 				current_date = date(current_date.year, 8,25) or
 				current_date = date(current_date.year, 2,1) or
 				current_date = date(current_date.year, 11,12)
-			)))
+			))
 			{
 			in_season <- true;
 			}
@@ -486,7 +484,7 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
  	}
 		
 	reflex calc_percentage_occupacy {
-		percent_occupancy <- (occupancy / max_capacity) * 100; // Changed to max_capacity instead of capacity as this was the total number of fruits on the tree. This way it does not go down
+		percent_occupancy <- (occupancy / max_capacity) * 100; /* Changed to max_capacity instead of capacity as this was the total number of fruits on the tree. This way it does not go down */ 
  		percent_overcapacity <- percent_occupancy - 100;
 		}
 	} 
@@ -535,7 +533,7 @@ species fly skills: [moving] control: fsm {
 	int counter <- 0;
 	int memory_count;
 	string current_affiliated_fruit;
-	//float wing_length;
+	float wing_length;
 	float sensing_boundary <- 10#m;
 	float step_distance;
 	float searching_boundary;
@@ -552,6 +550,7 @@ species fly skills: [moving] control: fsm {
  	 * distance, survival, mortality, and daily eggs
  	 * These functions are evaluated when called in the model
  	 */
+ 	float sensitivity_compute_distance_function {return (-2.7+2.7*(sensitivity_wing_length*0.35))*sensing_boundary;}
  	float compute_distance_function {return (-2.7+2.7*(wing_length*0.35))*sensing_boundary;}
  	float compute_survival_curve {return L / (1 + (exp(E * (adult_age - xmid))));}
 	float compute_mortality_chance (float survival_curve) {return (100 - survival_curve) / 100;}
@@ -565,7 +564,7 @@ species fly skills: [moving] control: fsm {
 	state immature_adult initial: true {
 		enter {
 			ask tree overlapping self {
-				myself.myTree <- self;  // the name of the tree that it is on
+				myself.myTree <- self;  					/* The name of the tree that it is on */
 			} 
 			if run_experiments = true {
 		if my_larval_host = "poor" {
@@ -577,8 +576,11 @@ species fly skills: [moving] control: fsm {
  		if my_larval_host = "good" {
  		wing_length <- gauss(6, 0.25);
  				}
+ 		searching_boundary <- compute_distance_function();	/* The distance function requires wing length to evaluate */
  			}
- 		searching_boundary <- compute_distance_function();	// The distance function requires wing length to evaluate
+ 		if run_experiments = false {
+ 			searching_boundary <- sensitivity_compute_distance_function();
+ 			}
 		}
 		
 		adult_age <- adult_age + (step/86400);
@@ -590,69 +592,75 @@ species fly skills: [moving] control: fsm {
 		transition to: adult when: adult_age >= mature_age;
 	}
 
-	state adult {		
-		adult_age <- adult_age + (step/86400);
-		do update_tree_quality;
+
+	state adult {
+		
+		enter { /*  */
+		if my_larval_host = "good" {
+ 	 		xmid <- 137.0;				/*survival parameters*/
+			L <- 100.0;  				/*survival parameters*/
+			E <- 0.045; 				/*survival parameters*/
+			beta <- 1.7;				/*Daily fecundity parameters*/
+ 			loc <- 6.0;					/*Daily fecundity parameters*/
+			enya <- compute_enya();		/*Daily fecundity parameters*/
+			coeff <- compute_coeff();	/*Daily fecundity parameters*/
+			}
 		if my_larval_host = "average" {
-			
  	 		xmid <- 118.5;
 			L <- 98.0; 
 			E <- 0.04; 
-			mortality_chance <- compute_mortality_chance(compute_survival_curve());
 			beta <- 1.7;
  			loc <- 6.0;
 			enya <- compute_enya();
 			coeff <- compute_coeff();
+		}
+		if my_larval_host = "poor" {
+ 	 		xmid <- 100.0; 
+			L <- 96.0;  
+			E <- 0.035; 
+			beta <- 1.7;
+ 			loc <- 6.0;
+			enya <- compute_enya();
+			coeff <- compute_coeff();
+			}
+		}
+				
+		adult_age <- adult_age + (step/86400);
+		
+		do update_tree_quality;
+		
+		if my_larval_host = "average" {
+			mortality_chance <- compute_mortality_chance(compute_survival_curve());
 			int daily_fecundity_result <- round(compute_daily_eggs());
 			daily_fecundity <- round(daily_fecundity_result);
 		}
 		
 		if my_larval_host = "poor" {
-			
- 	 		xmid <- 100.0; 
-			L <- 96.0;  // fixed at poor
-			E <- 0.035; // fixed at poor
 			mortality_chance <- compute_mortality_chance(compute_survival_curve());
-			beta <- 1.7;
- 			loc <- 6.0;
-			enya <- compute_enya();
-			coeff <- compute_coeff();
 			int daily_fecundity_result <- round(compute_daily_eggs());
 			daily_fecundity <- round(daily_fecundity_result);
 		}
 		
 		if my_larval_host = "good" {
-			
-			// survival parameters
- 	 		xmid <- 137.0;
-			L <- 100.0;  
-			E <- 0.045; 
 			mortality_chance <- compute_mortality_chance(compute_survival_curve());
-
-			// Daily fecundity parameters
-			beta <- 1.7;
- 			loc <- 6.0;
-			enya <- compute_enya();
-			coeff <- compute_coeff();
 			int daily_fecundity_result <- round(compute_daily_eggs());
 			daily_fecundity <- round(daily_fecundity_result);
 			}
 			
 		if daily_fecundity = 0 or (myTree.num_fruit_in_list) = 0 {
-			// there can be a chance that the sd makes the daily fecundity a negative value, so if less than 0, it will default to 0.
- 			daily_fecundity <- 0; 			
+ 			daily_fecundity <- 0; 			/* there can be a chance that the sd makes the daily fecundity a negative value, so if less than 0, it will default to 0. */
 			}
 		
-		// The only action for movement. Contains directed and simple wander.
+		/* The only action for movement. Contains directed and simple wander. */
 		do probability_to_stay;
 
-		// final action to perform as it determines the probability of the flies laying eggs.
+		/* final action to perform as it determines the probability of the flies laying eggs. */ 
 		do probability_to_lay_eggs_in_tree; 
 		
-		// update number of days in hosts
+		/* update number of days in hosts */
 		do calculate_days_in_hosts;
 		
-		// update cumulative fecundity
+		/* update cumulative fecundity */
 		cumulative_fecundity <- cumulative_fecundity + daily_fecundity;
 		transition to: overwintering_adult when: current_date between (date(current_date.year, 4, 14), date(current_date.year, 8,24));
 	}
@@ -1198,4 +1206,3 @@ experiment importFromCSV type: gui {
 		}
 	}
 }
-
