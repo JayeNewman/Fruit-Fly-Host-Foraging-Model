@@ -727,7 +727,6 @@ species fly skills: [moving] control: fsm {
 		ask tree overlapping self {
 				myself.myTree <- self;
 				}
-				write name + " 3 SIM W " + myTree;
  		} 	
  		
  	/*  Directed move is based on OPTIMAL FORAGING / BEST CHOICE BEHAVIOUR. 
