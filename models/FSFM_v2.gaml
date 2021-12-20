@@ -65,9 +65,9 @@ global torus: true {
 	
 	/* Tree parameters 
 	 * Parameter values for maximum larvae a single fruit can hold. */ 	
- 	int poor_max_larvae <- 2;
-	int average_max_larvae <- 2;
-	int good_max_larvae <- 2;
+ 	int poor_max_larvae <- 5;
+	int average_max_larvae <- 10;
+	int good_max_larvae <- 20;
 	
   
 	
