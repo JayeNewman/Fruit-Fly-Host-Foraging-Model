@@ -12,11 +12,11 @@ model FSFMv2
 
 global torus: true {
 	
-	file grid_map <- file("C:/Users/newma/gama_workspace/Foraging_model_with_size/includes/p30s0perc1_50x50.asc");
-	//file grid_map <- file("C:/Users/newma/gama_workspace/Foraging_model_with_size/includes/single_fruit_5p.asc");
+	//file grid_map <- file("C:/Users/newma/gama_workspace/Foraging_model_with_size/includes/p10s0perc1_30x30.asc");
+	file grid_map <- file("C:/Users/newma/gama_workspace/Foraging_model_with_size/includes/single_fruit_5p.asc");
 	file proba_stay_tree <- csv_file("../includes/proba_of_staying_tree.csv", ","); 
 	//file grid_map;  			/* generic when multiple maps are utilised in the experiments */
-	geometry shape <- envelope(grid_map);
+	//geometry shape <- envelope(grid_map);
 	string map_name;			/* For batch experiments that have multiple maps */
  	date starting_date <- date(2020, 8, 24);
  	float step <- 1 #day;
@@ -25,20 +25,20 @@ global torus: true {
 
 	
 	/*** INPUT PARAMETERS ***/
-	int nb_fly <- 10;								/* Fly parameter */
+	int nb_fly <- 5;								/* Fly parameter */
 	int mature_age <- 10;							/* Fly parameter */
 	float sensing_boundary <- 10#m;					/* Fly parameter */
 	int number_acceptable_larval_encounters <- 5; 	/* Fly parameter: number of times fruit with larvae can be encountered before they leave the tree */
-	bool memory <- true;							/* Fly parameter */
-	bool simultaneous_season <- false; 				/* Tree parameter */
-	bool poor_first <- false;
-	string global_path_file_name <- "../data/results/global2_sim_2021_12_17.csv";	/* Global parameter naming file */
+	bool memory;							/* Fly parameter */
+	bool simultaneous_season; 				/* Tree parameter */
+	bool poor_first;
+	string global_path_file_name <- "../data/results/sensitivity_test_good.csv";	/* Global parameter naming file */
 	
-	bool run_experiments <- true;			/* Global parameter: When false sets up model for sensitivity analysis of one fruit host */
+	bool run_experiments <- false;			/* Global parameter: When false sets up model for sensitivity analysis of one fruit host */
 	
-	string sensitivity_fruit; 	/* The fruit that the sensitivity analysis will define */ 
+	string sensitivity_fruit <- "good"; 	/* The fruit that the sensitivity analysis will define */ 
 	int sensitivity_max_larvae_per_fruit <- 10; 		/* Tree grid parameter for sensitivity analysis in the "run_experiments = false" in the global environment. */ 
-	string sensitivity_global_path_file_name <- "../data/results/sensitivity_global_average_2021_15_13.csv";	/* Global parameter naming file */
+	string sensitivity_global_path_file_name <- "../data/results/SAG_000_049_global.csv";	/* Global parameter naming file */
  
  	/* Cohort parameters 
  	 * To set for sensitivity analysis "run_experiments = false" in the global environment. */ 
@@ -72,9 +72,9 @@ global torus: true {
   
 	
 	/* Fruit per tree over time */ 	
- 	float a <- 5.0;  	/* height of curve */ 
- 	float b <- 20.0; 	/* centre of the peak */ 
- 	float c <- 10.0; 	/* the width of the bell curve */ 
+ 	float a <- 10.0;  	/* height of curve */ 
+ 	float b <- 30.0; 	/* centre of the peak */ 
+ 	float c <- 12.0; 	/* the width of the bell curve */ 
  	 
  	/* Memory affiliation probability to stay */	 
  	matrix proba_stay <- matrix(proba_stay_tree);
@@ -110,18 +110,12 @@ global torus: true {
 	list<tree> host_trees <- tree where (each.grid_value >= 1);
 	int immature_flies_over_time;
 	int total_all_fly_fecundity;
-	int host_good_emergence;
-	int host_average_emergence;
-	int host_poor_emergence;
 	float step_distance;
 
  	reflex calc_experiment_variables {
 		daily_flies <- length(fly);
 		immature_flies_over_time <- fly count (each.state = "immature_adult");
 		total_all_fly_fecundity <- fly sum_of (each.cumulative_fecundity);
-		host_good_emergence <- fly count (each.my_larval_host = "good");
-		host_average_emergence <- fly count (each.my_larval_host = "average");
-		host_poor_emergence <- fly count (each.my_larval_host = "poor");
 	}
 
 	int total_fruit;
@@ -172,41 +166,38 @@ global torus: true {
  	
  	/* SAVING FILES
  	 * Save code at each time step (from .csv file) for the experiments */ 
-// 	reflex save when: run_experiments = true { // UNDO
-//		save 
-//		[
-//		"simulation" + (int(self)), 
-//		cycle, 
-//		simultaneous_season, 
-//		map_name, 
-//		nb_adult_total, 
-//		max_flies, 
-//		total_fruit, 
-//		total_good_fruit, 
-//		total_poor_fruit, 
-//		total_average_fruit,
-//		flies_in_good_host, 
-//		flies_in_average_host, 
-//		flies_in_non_host, 
-//		flies_in_poor_host, 
-//		flies_in_good_host,
-//		days_in_ave_host, 
-//		days_in_non_host, 
-//		days_in_poor_host, 
-//		days_in_good_host,
-//		current_date, 
-//		daily_flies, 
-//		total_all_fly_fecundity,
-//		host_good_emergence, 
-//		host_average_emergence, 
-//		host_poor_emergence,
-//		total_lf_fecundity_poor, 
-//		total_lf_fecundity_average, 
-//		total_lf_fecundity_good 
-//		]
-//		to: global_path_file_name type: "csv" header: true rewrite: false;
-//		
-// 	}
+ 	reflex save when: run_experiments = true { // UNDO
+		save 
+		[
+		"simulation" + (int(self)), 
+		cycle, 
+		simultaneous_season, 
+		map_name, 
+		nb_adult_total, 
+		max_flies, 
+		total_fruit, 
+		total_good_fruit, 
+		total_poor_fruit, 
+		total_average_fruit,
+		flies_in_good_host, 
+		flies_in_average_host, 
+		flies_in_non_host, 
+		flies_in_poor_host, 
+		flies_in_good_host,
+		days_in_ave_host, 
+		days_in_non_host, 
+		days_in_poor_host, 
+		days_in_good_host,
+		current_date, 
+		daily_flies, 
+		total_all_fly_fecundity,
+		total_lf_fecundity_poor, 
+		total_lf_fecundity_average, 
+		total_lf_fecundity_good 
+		]
+		to: global_path_file_name type: "csv" header: true rewrite: false;
+		
+ 	}
  	
  	reflex save_sensitivity when: run_experiments = false {
  		save 
@@ -229,7 +220,6 @@ global torus: true {
 		sensitivity_pupal_mortality,
 		sensitivity_days_in_L_stage,
 		sensitivity_days_in_P_stage,
-		host_good_emergence, 
 		total_lf_fecundity_good
 		]
 		to: sensitivity_global_path_file_name type: "csv" header: true rewrite: false;
@@ -246,6 +236,9 @@ global torus: true {
  		 + " map_name: " + map_name
  		 + " memory: " + memory
  		 + " simultaneous " + simultaneous_season
+ 		 + " wing: " + sensitivity_wing_length
+ 		 + " enya: " + enya 
+ 		 + " coeff: " + coeff
  		+ " number of flies: " + daily_flies;
  	}
 	
@@ -554,6 +547,8 @@ species fly skills: [moving] control: fsm {
  	 * These functions are evaluated when called in the model
  	 */
  	float sensitivity_compute_distance_function {return (-2.7+2.7*(sensitivity_wing_length*0.35))*sensing_boundary;}
+ 	float sensitivity_compute_enya {return ((0.6411*sensitivity_wing_length^2)-(5.0078*sensitivity_wing_length)+35.293);}
+ 	
  	float compute_distance_function {return (-2.7+2.7*(wing_length*0.35))*sensing_boundary;}
  	float compute_survival_curve {return L / (1 + (exp(E * (adult_age - xmid))));}
 	float compute_mortality_chance (float survival_curve) {return (100 - survival_curve) / 100;}
@@ -605,8 +600,14 @@ species fly skills: [moving] control: fsm {
 			E <- 0.045; 				/*survival parameters*/
 			beta <- 1.7;				/*Daily fecundity parameters*/
  			loc <- 6.0;					/*Daily fecundity parameters*/
-			enya <- compute_enya();		/*Daily fecundity parameters*/
-			coeff <- compute_coeff();	/*Daily fecundity parameters*/
+ 			if run_experiments = true {
+ 				enya <- compute_enya();		/*Daily fecundity parameters*/
+				coeff <- compute_coeff();	/*Daily fecundity parameters*/
+ 				} 
+ 			if run_experiments = false {
+ 				enya <- sensitivity_compute_enya();
+ 				coeff <- compute_coeff();
+ 				}
 			}
 		if my_larval_host = "average" {
  	 		xmid <- 118.5;
@@ -614,8 +615,14 @@ species fly skills: [moving] control: fsm {
 			E <- 0.04; 
 			beta <- 1.7;
  			loc <- 6.0;
-			enya <- compute_enya();
-			coeff <- compute_coeff();
+			if run_experiments = true {
+ 				enya <- compute_enya();		/*Daily fecundity parameters*/
+				coeff <- compute_coeff();	/*Daily fecundity parameters*/
+ 				} 
+ 			if run_experiments = false {
+ 				enya <- sensitivity_compute_enya();
+ 				coeff <- compute_coeff();
+ 				}
 		}
 		if my_larval_host = "poor" {
  	 		xmid <- 100.0; 
@@ -623,8 +630,14 @@ species fly skills: [moving] control: fsm {
 			E <- 0.035; 
 			beta <- 1.7;
  			loc <- 6.0;
-			enya <- compute_enya();
-			coeff <- compute_coeff();
+			if run_experiments = true {
+ 				enya <- compute_enya();		/*Daily fecundity parameters*/
+				coeff <- compute_coeff();	/*Daily fecundity parameters*/
+ 				} 
+ 			if run_experiments = false {
+ 				enya <- sensitivity_compute_enya();
+ 				coeff <- compute_coeff();
+ 				}
 			}
 		}
 				
@@ -683,14 +696,17 @@ species fly skills: [moving] control: fsm {
 		nb_adults <- nb_adults - 1;
 		save (string(cycle) + 
 		"," + host + 
-		"," + my_larval_host +
-		"," + wing_length +
+		//"," + my_larval_host +
+		//"," + wing_length +
+		"," + sensitivity_wing_length +
+		"," + enya +
+		"," + coeff +
 		"," + age + 
 		"," + cumulative_fecundity + 
 		"," + searching_boundary + 
 		"," + imm_cumulative_distance +
 		"," + cumulative_distance)
-		to: "../data/results/exp2_fly_2021_12_17.csv" type: "csv" header:true rewrite: false;
+		to: "../data/results/SAG_fly_000_049.csv" type: "csv" header:true rewrite: false;
 		do die; 
 	}
 	
@@ -1191,7 +1207,7 @@ experiment Benchmarking type:gui benchmark:true  {
 
 experiment multiple_maps type: gui {
 	action _init_ {
-		csv_file map_files <- csv_file("../includes/exp_combinations_V3.csv", ",", false);
+		csv_file map_files <- csv_file("../includes/exp_combinations_V5.csv", ",", false);
 		matrix data <- matrix(map_files);
 		write data;
 		loop i from: 0 to: data.rows -1 {  // 19
@@ -1209,7 +1225,7 @@ experiment multiple_maps type: gui {
 experiment importFromCSV type: gui {
 
 	action _init_ {
-		csv_file size_csv_file <- csv_file("../models/includes/ffas_0to400_2021_10_05.csv", ",", false);
+		csv_file size_csv_file <- csv_file("../models/includes/SAG_000_049.csv", ",", false);
 		matrix data <- matrix(size_csv_file);
 		write data;
 		loop i from: 0 to: data.rows -1 {  // 19
