@@ -4,3 +4,5 @@ results/
 models/snapshots/FSFMv2_model_display_myDisplay_size_663x853_cycle_516_time_1637809523026.png
 models/snapshots/FSFMv2_model_display_myDisplay_size_663x853_cycle_520_time_1637809528098.png
 models/snapshots/FSFMv2_model_display_myDisplay_size_663x853_cycle_532_time_1637809538989.png
+*.jpg
+*.png
