@@ -12,8 +12,8 @@ model FSFMv2
 
 global torus: true {
 	
-	//file grid_map <- file("../includes/p10s0perc1_30x30.asc");
-	file grid_map <- file("../includes/single_fruit_5p.asc");
+	file grid_map <- file("../includes/crop10_land20_trees_10.asc");
+	//file grid_map <- file("../includes/single_fruit_5p.asc");
 	file proba_stay_tree <- csv_file("../includes/proba_of_staying_tree.csv", ","); 
 	//file grid_map;  			/* generic when multiple maps are utilised in the experiments */
 	//geometry shape <- envelope(grid_map);
@@ -29,7 +29,7 @@ global torus: true {
 
 	
 	/*** INPUT PARAMETERS ***/
-	int nb_fly <- 5;								/* Fly parameter */
+	int nb_fly <- 10;								/* Fly parameter */
 	int mature_age <- 10;							/* Fly parameter */
 	float sensing_boundary <- 10#m;					/* Fly parameter */
 	int number_acceptable_larval_encounters <- 5; 	/* Fly parameter: number of times fruit with larvae can be encountered before they leave the tree */
@@ -38,7 +38,7 @@ global torus: true {
 	bool poor_first;
 	string global_path_file_name <- "../data/results/a1_global.csv";	/* Global parameter naming file */
 	
-	bool run_experiments <- false;						/* Global parameter: When false sets up model for sensitivity analysis of one fruit host */
+	bool run_experiments <- true;						/* Global parameter: When false sets up model for sensitivity analysis of one fruit host */
 	
 	string sensitivity_fruit <- "good"; 				/* The fruit that the sensitivity analysis will define */ 
 	int sensitivity_max_larvae_per_fruit <- 10; 		/* Tree grid parameter for sensitivity analysis in the "run_experiments = false" in the global environment. */ 
@@ -88,14 +88,16 @@ global torus: true {
 	list memory_prob_4 <- proba_stay column_at 4; 
 	
  	init {create fly number: nb_fly {
- 		    location <- any_location_in(one_of(host_trees));
+ 		    //location <- any_location_in(one_of(host_trees));
+ 		    location <- any_location_in(one_of(tree));
  		    myTree <- tree closest_to self;
 			nb_adults <- nb_adults + 1;
 			nb_adult_total <- nb_adult_total + 1;
 			age <- 10.0;
 			adult_age <- 10.0;
 			my_cohort <- "start";
-			my_larval_host <- myTree.fruit_quality;
+			//my_larval_host <- myTree.fruit_quality;
+			my_larval_host <- "good";
 			}
 		}
  	 
@@ -259,7 +261,7 @@ global torus: true {
 
 grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false use_individual_shapes: false {
 	float grid_value <- grid_value;
-	rgb color <- rgb(int(1 * (percent_occupancy)), 1, int(1 * (percent_occupancy))) update: rgb(int(1 * (percent_occupancy)), 1, int(1 * (percent_occupancy)));
+	rgb color <- color; //rgb(int(1 * (percent_occupancy)), 1, int(1 * (percent_occupancy))) update: rgb(int(1 * (percent_occupancy)), 1, int(1 * (percent_occupancy)));
 	string fruit_quality;
 	float season_day;
 	int nb_cohorts_inside;

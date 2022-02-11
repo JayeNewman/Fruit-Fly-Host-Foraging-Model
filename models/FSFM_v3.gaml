@@ -16,8 +16,6 @@ global torus: true {
 	//file grid_map <- file("../includes/single_fruit_5p.asc");
 	file proba_stay_tree <- csv_file("../includes/proba_of_staying_tree.csv", ","); 
 	//file grid_map;  			/* generic when multiple maps are utilised in the experiments */
-	float env_size <- 250 #m;
-	geometry map_size <- square(env_size);
 	string map_name;			/* For batch experiments that have multiple maps */
  	date starting_date <- date(2020, 8, 24);
  	float step <- 1 #day;
@@ -270,6 +268,7 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 	float grid_value <- grid_value;
 	rgb color; // <- rgb(int(1 * (percent_occupancy)), 1, int(1 * (percent_occupancy))) update: rgb(int(1 * (percent_occupancy)), 1, int(1 * (percent_occupancy)));
 	string fruit_quality;
+	bool is_crop;
 	float season_day;
 	int nb_cohorts_inside;
 	int eggs_in_tree;
@@ -292,9 +291,9 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 	int max_larvae_per_fruit;
 	int days_between_spray;
 	int spray_gap <- 14;
-	bool harvested <- false;
-	bool is_crop <- false;
-	int harvest_day <- 25;
+//	bool harvested <- false;
+//	bool is_crop <- false;
+//	int harvest_day <- 25;
 		
 	init {
 		if grid_value = 0.0 {
@@ -320,7 +319,7 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 		if grid_value = 4.0 {
 			is_crop <- true;
 			fruit_quality <- crop_quality;
-			color <- #black;
+			color <- #darkgreen;
 			max_larvae_per_fruit <- crop_max_larvae;
 		}
 		
@@ -337,7 +336,7 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 	}
 	
 		reflex fruit_cycle when: calc_fruit_on_tree > length(list_of_fruit) {
-			if harvested = false {	
+//			if harvested = false {	
 				new_daily_fruit <- calc_fruit_on_tree - length(list_of_fruit);
 				tree treeRef <- self;
 			loop i from: 1 to: new_daily_fruit {
@@ -349,8 +348,6 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 					
 				}				
 				
-			}
-				
 		}
 		
 	reflex reduce_fruit when: calc_fruit_on_tree < length(list_of_fruit) {
@@ -360,6 +357,51 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 			available <- false;
 		}
 	}
+	
+	
+	/* SPRAY CROP */
+	
+	 action spray_crop {
+ 			write "days between spray" + days_between_spray + " " + name;
+ 			if is_crop = true {
+ 			ask fly overlapping self {
+ 				spray_death <- spray_death + 1;
+ 				write "sprayed " + spray_death + " " + name;
+ 				do die;
+ 				}
+ 			}
+ 	}
+ 	
+ 	reflex countspray_days when: in_season = true {
+ 		days_between_spray <- days_between_spray + 1;
+ 	}
+ 	
+ 		reflex first_spray when: run_experiments = true and season_day = 2 {
+			if in_season = true and is_crop = true {
+				 	do spray_crop;	 	
+			}
+		}
+		
+		reflex second_spray when: days_between_spray = spray_gap and run_experiments = true {
+				if in_season = true and is_crop = true {
+				 	do spray_crop;
+			}
+		}
+		
+		reflex third_spray when: days_between_spray = (spray_gap * 2) and run_experiments = true {
+				if in_season = true and is_crop = true {
+				 	do spray_crop;
+				 	days_between_spray <- 0;
+			}
+		}
+		
+		reflex fourth_spray when: days_between_spray = (spray_gap * 3) and run_experiments = true {
+				if in_season = true and is_crop = true {
+				 	do spray_crop;
+				 	days_between_spray <- 0;
+			}
+		}
+ 
  
  	/* SEASONS
  	 */  
@@ -372,7 +414,8 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 			max_capacity <- 1;
 			days_fruit_fallen <- 0;
 			larvae_exited_fruit <- 0;
-			harvested <- false;
+			days_between_spray <- 0;
+//			harvested <- false;
 		}
 	
 	action start_season {
@@ -477,6 +520,7 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 			}
 		}
 	
+	
 	/* CALCULATE THE EGGS IN A TREE
 	 * If the tree is a host tree and has at least 1 fruit or greater on the tree
 	 * Then calculate the number of eggs in the tree by summing the fecundity of each fly within the tree
@@ -543,21 +587,6 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 // 				remove self from: fruitTree.list_of_fruit;
 // 				available <- false;
 // 				}
-// 			}
-// 		}
-// 	}
- 	
-// 	action spray_crop {
-// 		if is_crop = true and in_season = true {
-// 			days_between_spray <- days_between_spray + 1;
-// 			write "dbs" + days_between_spray;
-// 			if days_between_spray = spray_gap {
-// 			ask fly overlapping self {
-// 				spray_death <- spray_death + 1;
-// 				write "sprayed " + spray_death;
-// 				do die;
-// 				}
-//  			days_between_spray <- 0;
 // 			}
 // 		}
 // 	}
@@ -1103,7 +1132,7 @@ species cohort control: fsm {
 	int nb_cohort;
 	tree my_larval_tree <- one_of(tree);
 	string my_larval_host -> my_larval_tree.fruit_quality;
-	bool is_host_crop -> my_larval_tree.is_crop;
+	//bool is_host_crop -> my_larval_tree.is_crop;
 	float egg_mortality;
 	float larval_mortality;
 	float pupal_mortality;
@@ -1117,8 +1146,8 @@ species cohort control: fsm {
 	float density_mortality;
 	float combined_mortality;
 	int my_capacity;
-	int larvae_removed;
-	int eggs_removed;
+	//int larvae_removed;
+	//int eggs_removed;
 	
 	reflex update_age {
 		age <- age + (step/86400);
@@ -1181,7 +1210,6 @@ species cohort control: fsm {
 	}
 
 	state eggs initial: true {
-		write "ima egg " + name;		
 		enter {
  			do assign_tree_quality;
  			my_capacity <- my_larval_tree.capacity;
@@ -1199,7 +1227,6 @@ species cohort control: fsm {
 				}           
 			}	
 		transition to: larvae when: age >= 2.0 {
-			write "woop transitioned" ;
 		}
 	}
 
@@ -1282,7 +1309,7 @@ species cohort control: fsm {
 				my_pupal_development_time <- myself.days_in_P_stage;
  				nb_adults <- nb_adults + 1;
  				nb_adult_total <- nb_adult_total + 1;
- 				is_larval_crop <- myself.is_host_crop;
+ 				//is_larval_crop <- myself.is_host_crop;
 				}
 			}
 			do die;
