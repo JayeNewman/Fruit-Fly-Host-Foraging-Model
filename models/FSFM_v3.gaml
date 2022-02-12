@@ -25,7 +25,6 @@ global torus: true {
  	int total_dead;
  	float R0;
  	float ave_daily;
-
 	
 	/*** INPUT PARAMETERS ***/
 	int nb_fly <- 10;								/* Fly parameter */
@@ -35,7 +34,7 @@ global torus: true {
 	bool memory;									/* Fly parameter */
 	bool simultaneous_season; 						/* Tree parameter */
 	bool poor_first;
-	string global_path_file_name <- "../data/results/a1_global.csv";	/* Global parameter naming file */
+	string global_path_file_name <- "../data/results/management_test_global.csv";	/* Global parameter naming file */
 	
 	bool run_experiments <- true;						/* Global parameter: When false sets up model for sensitivity analysis of one fruit host */
 	
@@ -44,6 +43,7 @@ global torus: true {
 	int season_gap;
 	string crop_quality <- "good";
 	int crop_max_larvae <- 40;
+	float protein_kill_rate <- 0.5;
 	
 	// Sensitivity parameters
 	string sensitivity_fruit <- "good"; 				/* The fruit that the sensitivity analysis will define */ 
@@ -358,16 +358,32 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 		}
 	}
 	
-	
+/* MANAGEMENT */
 	/* SPRAY CROP */
 	
 	 action spray_crop {
- 			write "days between spray" + days_between_spray + " " + name;
  			if is_crop = true {
- 			ask fly overlapping self {
- 				spray_death <- spray_death + 1;
- 				write "sprayed " + spray_death + " " + name;
- 				do die;
+	 			ask fly overlapping self {
+	 				spray_death <- spray_death + 1;
+	 				nb_adults <- nb_adults - 1;
+					total_dead <- total_dead + 1;
+					total_lifetime_fecundity <- total_lifetime_fecundity + cumulative_fecundity;
+			 		protein_death <- protein_death + 1;
+			 		cause_of_death <- "chemical_spray";
+	 				write "chemical death " + " " + name;
+					save [string(cycle),
+					cause_of_death,
+					host,
+					my_larval_host,
+					wing_length,
+					sensitivity_wing_length,
+					age,
+					cumulative_fecundity,
+					searching_boundary,
+					imm_cumulative_distance,
+					cumulative_distance]
+				to: "../data/results/management_test_fly.csv" type: "csv" header:true rewrite: false;
+ 					do die;
  				}
  			}
  	}
@@ -376,32 +392,70 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
  		days_between_spray <- days_between_spray + 1;
  	}
  	
- 		reflex first_spray when: run_experiments = true and season_day = 2 {
-			if in_season = true and is_crop = true {
-				 	do spray_crop;	 	
-			}
+ 	reflex first_spray when: run_experiments = true and season_day = 5 and in_season = true and is_crop = true {
+ 		write "chem spray 1";
+				 do spray_crop;	 	
+	}
+		
+	reflex second_spray when: run_experiments = true and days_between_spray = spray_gap and in_season = true and is_crop = true {
+				  		write "chem spray 12";
+				 
+				 do spray_crop;
+	}
+		
+	reflex third_spray when: run_experiments = true and days_between_spray = (spray_gap * 2) and in_season = true and is_crop = true {
+	 		write "chem spray 3";
+	
+				 do spray_crop;
+	}
+		
+	reflex fourth_spray when: run_experiments = true and days_between_spray = (spray_gap * 3) and in_season = true and is_crop = true {
+	 		write "chem spray 3";
+	
+				 do spray_crop;
 		}
 		
-		reflex second_spray when: days_between_spray = spray_gap and run_experiments = true {
-				if in_season = true and is_crop = true {
-				 	do spray_crop;
-			}
-		}
-		
-		reflex third_spray when: days_between_spray = (spray_gap * 2) and run_experiments = true {
-				if in_season = true and is_crop = true {
-				 	do spray_crop;
-				 	days_between_spray <- 0;
-			}
-		}
-		
-		reflex fourth_spray when: days_between_spray = (spray_gap * 3) and run_experiments = true {
-				if in_season = true and is_crop = true {
-				 	do spray_crop;
-				 	days_between_spray <- 0;
-			}
-		}
  
+ 	/* PROTEIN SPRAY */
+ 	action protein_spray {
+ 		if is_crop = true {
+ 			ask fly overlapping self {
+ 				if state = "immature_adult" {
+ 					if flip(protein_kill_rate) {
+ 						protein_death <- protein_death + 1;
+ 						nb_adults <- nb_adults - 1;
+						total_dead <- total_dead + 1;
+						total_lifetime_fecundity <- total_lifetime_fecundity + cumulative_fecundity;
+		 				cause_of_death <- "protein_bait";
+ 						write "protein death " + protein_death + " " + name;
+						save [string(cycle),
+							cause_of_death,
+							host,
+							my_larval_host,
+							wing_length,
+							sensitivity_wing_length,
+							age,
+							cumulative_fecundity,
+							searching_boundary,
+							imm_cumulative_distance,
+							cumulative_distance]
+						to: "../data/results/management_test_fly.csv" type: "csv" header:true rewrite: false;
+							do die; 
+ 					}
+ 				}
+ 			}
+ 		}
+ 	}
+ 	
+ 	reflex first_protein_spray when: season_day = 10 and is_crop = true and in_season = true {
+ 			write "first protein spray ";
+ 			do protein_spray;
+ 	}
+ 	
+ 	reflex second_protein_spray when: season_day = 34 and is_crop = true and in_season = true {
+ 		write "second protein spray ";
+ 			do protein_spray;
+ 	}
  
  	/* SEASONS
  	 */  
@@ -639,6 +693,7 @@ species fruit {
 }
 
 species fly skills: [moving] control: fsm {
+	rgb fly_color;
 	tree myTree <- one_of(tree);  // name of tree
 	string current_tree_quality;
  	string my_cohort;
@@ -663,6 +718,8 @@ species fly skills: [moving] control: fsm {
 	float cumulative_distance;								// includes immature cumulative distance
 	float imm_cumulative_distance;
 	int spray_death;
+	int protein_death;
+	string cause_of_death;
 	
 	/* LISTS for evaluating foraging */
 	list<tree> fruiting_trees; 								// List of trees fruiting	
@@ -687,6 +744,7 @@ species fly skills: [moving] control: fsm {
  
  	/*** STATES ***/  
 	state immature_adult initial: true {
+		fly_color <- #orange;
 		enter {
 			ask tree overlapping self {
 				myself.myTree <- self;  					/* The name of the tree that it is on */
@@ -719,6 +777,7 @@ species fly skills: [moving] control: fsm {
 
 
 	state adult {
+		fly_color <- #red;
 		enter { /* Fixed parameters */
 		if my_larval_host = "good" {
  	 		xmid <- 137.0;				/*survival parameters*/
@@ -809,6 +868,7 @@ species fly skills: [moving] control: fsm {
 	}
 
 	state overwintering_adult {
+		fly_color <- #gray;
 		adult_age <- adult_age; // pauses the adult age at this age (adult_age is built into the fecundity function)
  		mortality_chance <- 0.0114;
 		daily_fecundity <- 0;
@@ -822,17 +882,19 @@ species fly skills: [moving] control: fsm {
 		nb_adults <- nb_adults - 1;
 		total_dead <- total_dead + 1;
 		total_lifetime_fecundity <- total_lifetime_fecundity + cumulative_fecundity;
+		cause_of_death <- "old_age";
 		save [string(cycle),
+			cause_of_death,
 			host,
-		//"," + my_larval_host +
-		//"," + wing_length +
-			sensitivity_wing_length,
+		    my_larval_host,
+			wing_length,
+			//sensitivity_wing_length,
 			age,
 			cumulative_fecundity,
 			searching_boundary,
 			imm_cumulative_distance,
 			cumulative_distance]
-		to: "../data/results/new_sens_test_fly.csv" type: "csv" header:true rewrite: false;
+		to: "../data/results/management_test_fly.csv" type: "csv" header:true rewrite: false;
 		do die; 
 	}
 	
@@ -1110,20 +1172,10 @@ species fly skills: [moving] control: fsm {
 
 	/* Fly agent aesthetics
 	 */
-	aspect default {
+	aspect fly_default {
 		//draw circle(searching_boundary) color: #pink empty: true;
 		//draw circle(sensing_boundary) color: #lightpink empty: true;
-		if state = "immature_adult" 
-		{
-			color <- #red;
-		}
-		if state = "adult" {
-			color <- #orange;
-		} 
-		if state = "overwintering_adult" {
-			color <- #grey;
-		}
-		draw square(0.3) color: color;
+		draw square(0.3) color: fly_color;
 	}
 }
 
@@ -1325,8 +1377,8 @@ experiment my_experiment {
 		layout #split;
 		display myDisplay {
 			grid tree refresh: false;
-			species fly aspect: default;
 			species cohort aspect: default;
+			species fly aspect: fly_default;
 		}
 
 		display num_adults {			
