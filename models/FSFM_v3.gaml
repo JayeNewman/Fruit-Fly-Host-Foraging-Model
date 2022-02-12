@@ -27,12 +27,12 @@ global torus: true {
  	float ave_daily;
 	
 	/*** INPUT PARAMETERS ***/
-	int nb_fly <- 10;								/* Fly parameter */
-	int mature_age <- 10;							/* Fly parameter */
-	float sensing_boundary <- 10#m;					/* Fly parameter */
-	int number_acceptable_larval_encounters <- 5; 	/* Fly parameter: number of times fruit with larvae can be encountered before they leave the tree */
-	bool memory;									/* Fly parameter */
-	bool simultaneous_season; 						/* Tree parameter */
+	int nb_fly <- 10;									/* Fly parameter */
+	int mature_age <- 10;								/* Fly parameter */
+	float sensing_boundary <- 10#m;						/* Fly parameter */
+	int number_acceptable_larval_encounters <- 5; 		/* Fly parameter: number of times fruit with larvae can be encountered before they leave the tree */
+	bool memory;										/* Fly parameter */
+	bool simultaneous_season; 							/* Tree parameter */
 	bool poor_first;
 	string global_path_file_name <- "../data/results/management_test_global.csv";	/* Global parameter naming file */
 	
@@ -44,6 +44,7 @@ global torus: true {
 	string crop_quality <- "good";
 	int crop_max_larvae <- 40;
 	float protein_kill_rate <- 0.5;
+	//int h_day <- 25;
 	
 	// Sensitivity parameters
 	string sensitivity_fruit <- "good"; 				/* The fruit that the sensitivity analysis will define */ 
@@ -263,6 +264,9 @@ global torus: true {
 	
  	
 	} // end global
+	
+	
+	// TREE GRID SPECIES
 
 grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false use_individual_shapes: false {
 	float grid_value <- grid_value;
@@ -289,7 +293,6 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 	list<fruit> list_of_fruit <- list_of_fruit update: list_of_fruit;
 	int num_fruit_in_list <- num_fruit_in_list update: length(list_of_fruit);
 	int max_larvae_per_fruit;
-	int days_between_spray;
 	int spray_gap <- 14;
 //	bool harvested <- false;
 //	bool is_crop <- false;
@@ -358,63 +361,48 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 		}
 	}
 	
+	
 /* MANAGEMENT */
 	/* SPRAY CROP */
 	
 	 action spray_crop {
  			if is_crop = true {
 	 			ask fly overlapping self {
-	 				spray_death <- spray_death + 1;
-	 				nb_adults <- nb_adults - 1;
-					total_dead <- total_dead + 1;
-					total_lifetime_fecundity <- total_lifetime_fecundity + cumulative_fecundity;
-			 		protein_death <- protein_death + 1;
 			 		cause_of_death <- "chemical_spray";
-	 				write "chemical death " + " " + name;
-					save [string(cycle),
-					cause_of_death,
-					host,
-					my_larval_host,
-					wing_length,
-					sensitivity_wing_length,
-					age,
-					cumulative_fecundity,
-					searching_boundary,
-					imm_cumulative_distance,
-					cumulative_distance]
-				to: "../data/results/management_test_fly.csv" type: "csv" header:true rewrite: false;
+					do death_save;
  					do die;
  				}
  			}
  	}
  	
- 	reflex countspray_days when: in_season = true {
- 		days_between_spray <- days_between_spray + 1;
- 	}
- 	
- 	reflex first_spray when: run_experiments = true and season_day = 5 and in_season = true and is_crop = true {
- 		write "chem spray 1";
+ 	reflex first_spray when: run_experiments = true 
+ 	and season_day = 5 							// This part varies to the next
+ 	and in_season = true 
+ 	and is_crop = true {
 				 do spray_crop;	 	
 	}
 		
-	reflex second_spray when: run_experiments = true and days_between_spray = spray_gap and in_season = true and is_crop = true {
-				  		write "chem spray 12";
-				 
+	reflex second_spray when: run_experiments = true 
+	and season_day = spray_gap 			// This part varies to the next
+	and in_season = true 
+	and is_crop = true {
 				 do spray_crop;
 	}
 		
-	reflex third_spray when: run_experiments = true and days_between_spray = (spray_gap * 2) and in_season = true and is_crop = true {
-	 		write "chem spray 3";
-	
+	reflex third_spray when: run_experiments = true 
+	and season_day = (spray_gap * 2) 	// This part varies to the next
+	and in_season = true 
+	and is_crop = true {
 				 do spray_crop;
 	}
 		
-	reflex fourth_spray when: run_experiments = true and days_between_spray = (spray_gap * 3) and in_season = true and is_crop = true {
-	 		write "chem spray 3";
-	
+	reflex fourth_spray when: run_experiments = true 
+	and season_day = (spray_gap * 3) 	// This part varies
+	and in_season = true 
+	and is_crop = true {
 				 do spray_crop;
 		}
-		
+
  
  	/* PROTEIN SPRAY */
  	action protein_spray {
@@ -422,24 +410,8 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
  			ask fly overlapping self {
  				if state = "immature_adult" {
  					if flip(protein_kill_rate) {
- 						protein_death <- protein_death + 1;
- 						nb_adults <- nb_adults - 1;
-						total_dead <- total_dead + 1;
-						total_lifetime_fecundity <- total_lifetime_fecundity + cumulative_fecundity;
 		 				cause_of_death <- "protein_bait";
- 						write "protein death " + protein_death + " " + name;
-						save [string(cycle),
-							cause_of_death,
-							host,
-							my_larval_host,
-							wing_length,
-							sensitivity_wing_length,
-							age,
-							cumulative_fecundity,
-							searching_boundary,
-							imm_cumulative_distance,
-							cumulative_distance]
-						to: "../data/results/management_test_fly.csv" type: "csv" header:true rewrite: false;
+							do death_save;
 							do die; 
  					}
  				}
@@ -447,13 +419,17 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
  		}
  	}
  	
- 	reflex first_protein_spray when: season_day = 10 and is_crop = true and in_season = true {
- 			write "first protein spray ";
+ 	reflex first_protein_spray when: run_experiments = true 
+ 	and season_day = 10 
+ 	and is_crop = true 
+ 	and in_season = true {
  			do protein_spray;
  	}
  	
- 	reflex second_protein_spray when: season_day = 34 and is_crop = true and in_season = true {
- 		write "second protein spray ";
+ 	reflex second_protein_spray when: run_experiments = true 
+ 	and season_day = 34 
+ 	and is_crop = true 
+ 	and in_season = true {
  			do protein_spray;
  	}
  
@@ -468,7 +444,6 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 			max_capacity <- 1;
 			days_fruit_fallen <- 0;
 			larvae_exited_fruit <- 0;
-			days_between_spray <- 0;
 //			harvested <- false;
 		}
 	
@@ -875,14 +850,10 @@ species fly skills: [moving] control: fsm {
 		transition to: adult when: current_date = date(current_date.year, 8, 24);
 	}
 	
-	/*** REFLEXES ***/
-	
-	/* Save fly information and DIE */
-	reflex chance_to_die when: flip(mortality_chance) {
+	action death_save {
 		nb_adults <- nb_adults - 1;
 		total_dead <- total_dead + 1;
 		total_lifetime_fecundity <- total_lifetime_fecundity + cumulative_fecundity;
-		cause_of_death <- "old_age";
 		save [string(cycle),
 			cause_of_death,
 			host,
@@ -895,8 +866,18 @@ species fly skills: [moving] control: fsm {
 			imm_cumulative_distance,
 			cumulative_distance]
 		to: "../data/results/management_test_fly.csv" type: "csv" header:true rewrite: false;
+	}
+	
+	
+	/*** REFLEXES ***/
+	
+	/* Save fly information and DIE */
+	reflex chance_to_die when: flip(mortality_chance) {
+		cause_of_death <- "old_age";
+		do death_save;
 		do die; 
 	}
+
 	
 	/* Update age */
 	reflex update_age {
