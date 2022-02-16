@@ -12,11 +12,13 @@ model FSFMv2
 
 global torus: true {
 	
-	file grid_map <- file("../includes/crop10_land20_trees_10.asc");
+	file grid_map <- file("../includes/crop50_land100_trees_00.asc");
 	//file grid_map <- file("../includes/single_fruit_5p.asc");
 	file proba_stay_tree <- csv_file("../includes/proba_of_staying_tree.csv", ","); 
 	//file grid_map;  			/* generic when multiple maps are utilised in the experiments */
 	string map_name;			/* For batch experiments that have multiple maps */
+	float env_size <- 500#m; // in a 200 x 200 grid this makes it 5m cells?
+	geometry shape <- square(env_size);
  	date starting_date <- date(2020, 8, 24);
  	float step <- 1 #day;
  	int max_flies;
@@ -25,6 +27,8 @@ global torus: true {
  	int total_dead;
  	float R0;
  	float ave_daily;
+ 	int total_crop_infested;
+ 	int total_larvae_exited_crop_host;
 	
 	/*** INPUT PARAMETERS ***/
 	int nb_fly <- 10;
@@ -32,20 +36,19 @@ global torus: true {
 	int mature_age <- 10;								/* Fly parameter */
 	float sensing_boundary <- 10#m;						/* Fly parameter */
 	int number_acceptable_larval_encounters <- 5; 		/* Fly parameter: number of times fruit with larvae can be encountered before they leave the tree */
-	bool memory;										/* Fly parameter */
-	bool simultaneous_season; 							/* Tree parameter */
-	bool poor_first;
-	string global_path_file_name <- "../data/results/management_test_global.csv";	/* Global parameter naming file */
+	bool memory <- true;										/* Fly parameter */
+	bool simultaneous_season <- false; 							/* Tree parameter */
+	bool poor_first <- false;
+	string global_path_file_name <- "../data/results/management_global_null_model_good.csv";	/* Global parameter naming file */
+	int run;
 	
 	bool run_experiments <- true;						/* Global parameter: When false sets up model for sensitivity analysis of one fruit host */
 	
 	// Crop input parameters
-//	float fruit_remaining_after_pick <- 0.1;
 	float fruit_pick <- 0.95;
-	int season_gap;
+	int season_gap <- 16;
 	string crop_quality <- "good";
-	int crop_max_larvae <- 40;
-	float protein_kill_rate <- 0.5;
+	int crop_max_larvae;
 	int harvest_day <- 25;
 	
 	// Sensitivity parameters
@@ -73,7 +76,7 @@ global torus: true {
 	int good_max_larvae <- 45;
 	
 	/* Fruit per tree over time */ 	
- 	float a <- 20.0;  	/* height of curve */ 
+ 	float a <- 10.0;  	/* height of curve */ 
  	float b <- 20.0; 	/* centre of the peak */ 
  	float c <- 11.0; 	/* the width of the bell curve */ 
  	 
@@ -100,6 +103,7 @@ global torus: true {
 	int flies_in_good_host; 
 	
 	list<tree> host_trees <- tree where (each.grid_value >= 1);
+	
 	
 	// INITIALISE FLY
  	init {create fly number: nb_fly {
@@ -141,6 +145,8 @@ global torus: true {
 		immature_flies_over_time <- fly count (each.state = "immature_adult");
 		R0 <- (total_lifetime_fecundity / (total_dead + 1)) with_precision 3; // When the fly dies it gets added to the total_dead and life_time_fecundity
 		ave_daily <- (nb_adult_total  / (cycle + 1)) with_precision 3; 
+		total_crop_infested <- fruit where(each.fruitTree.is_crop = true) count(each.larvae_within = true);
+		total_larvae_exited_crop_host <- tree sum_of(each.larvae_exited_crop_host);
 	}
 
  	reflex calc_experimental_variables when: run_experiments = true {
@@ -166,13 +172,16 @@ global torus: true {
 		save 
 		[
 		"simulation" + (int(self)), 
+		crop_quality,
 		cycle, 
 		R0,
 		ave_daily,
-		memory,
-		simultaneous_season, 
-		poor_first,
-		map_name, 
+		total_crop_infested,
+		total_larvae_exited_crop_host,
+//		memory,
+//		simultaneous_season, 
+//		poor_first,
+//		map_name, 
 		nb_adult_total, 
 		max_flies, 
 		total_fruit, 
@@ -184,10 +193,10 @@ global torus: true {
 		flies_in_non_host, 
 		flies_in_poor_host, 
 		flies_in_good_host,
-		days_in_ave_host, 
-		days_in_non_host, 
-		days_in_poor_host, 
-		days_in_good_host,
+//		days_in_ave_host, 
+//		days_in_non_host, 
+//		days_in_poor_host, 
+//		days_in_good_host,
 		current_date, 
 		daily_flies 
 		]
@@ -225,7 +234,7 @@ global torus: true {
 	reflex cycles { 
  		write 
  		 " cycle: " + cycle	+ " " + int(self)
- 		+ " season gap " + season_gap 
+ 		+ " crop " + crop_quality
 		+ " R0 " + R0
 		+ " aveDaily " + ave_daily
   		+ " number of flies: " + daily_flies;
@@ -252,6 +261,7 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 	int capacity;
 	int max_capacity <- 1;
 	int larvae_exited_fruit;
+	int larvae_exited_crop_host;
 	int calc_fruit_on_tree;
 	int occupancy;
 	float percent_occupancy;
@@ -290,7 +300,15 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 			is_crop <- true;
 			fruit_quality <- crop_quality;
 			color <- #darkgreen;
-			max_larvae_per_fruit <- crop_max_larvae;
+			if fruit_quality = "poor" {
+				max_larvae_per_fruit <- poor_max_larvae;
+			}
+			if fruit_quality = "average" {
+				max_larvae_per_fruit <- average_max_larvae;
+			}
+			if fruit_quality = "good" {
+				max_larvae_per_fruit <- good_max_larvae;
+			}
 		}
 		
 		if run_experiments = false {
@@ -355,7 +373,7 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 			}
 		}
 			
- 	reflex poor_tree_fruiting_first when: fruit_quality = "poor" and run_experiments = true {
+ 	reflex poor_tree_fruiting_first when: fruit_quality = "poor" and run_experiments = true and is_crop = false {
 		if (simultaneous_season = true 
 			and ((current_date = date(current_date.year, 1,5)) 
 				or (current_date = date(current_date.year, 8,25))
@@ -378,7 +396,7 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 			}
 		}
 		
-	reflex average_tree_fruiting when: fruit_quality = "average" and run_experiments = true {
+	reflex average_tree_fruiting when: fruit_quality = "average" and run_experiments = true and is_crop = false {
 		if simultaneous_season = true 
 		and (current_date = date(current_date.year, 1,19) 
 			or current_date = date(current_date.year, 9,7)
@@ -396,7 +414,7 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 			}
 		}
 		
-	reflex good_tree_fruiting when: fruit_quality = "good" and run_experiments = true {
+	reflex good_tree_fruiting when: fruit_quality = "good" and run_experiments = true and is_crop = false {
 		if simultaneous_season = true 
 		and (current_date = date(current_date.year, 2,1) 
 			or current_date = date(current_date.year, 9,21)
@@ -417,6 +435,34 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 					}
 				}
 		}
+		
+		reflex crop_fruiting when: fruit_quality = crop_quality and is_crop = true {
+			if ((current_date = date(current_date.year, 8,25)) or
+				(current_date = date(current_date.year, 8,25) + season_gap #week))
+		
+//					if (simultaneous_season = true 
+//			and ((current_date = date(current_date.year, 1,5)) 
+//				or (current_date = date(current_date.year, 8,25))
+//			)
+//		) 
+//		or (simultaneous_season = false and poor_first = true
+//				and ((current_date = date(current_date.year, 8,25)) or
+//				(current_date = date(current_date.year, 8,25) + season_gap #week))
+//		)
+//		or (simultaneous_season = false and poor_first = false
+//			and current_date = date(current_date.year, 2,1)
+//		)
+			{
+			in_season <- true;
+			}
+			if in_season = true {
+				do start_season;
+			if season_day > b and length(list_of_fruit) = 0 and days_fruit_fallen = 14  {
+					do reset_season;
+				}
+			}
+		}
+		
 		
 		reflex sensitivity_fruiting when: run_experiments = false { 
 		if (simultaneous_season = true and (
@@ -820,12 +866,12 @@ species fly skills: [moving] control: fsm {
 			wing_length,
 			//sensitivity_wing_length,
 			age,
-			adult_age,
+//			adult_age,
 			cumulative_fecundity,
 			searching_boundary,
 			imm_cumulative_distance,
 			cumulative_distance]
-		to: "../data/results/management_test_fly.csv" type: "csv" header:true rewrite: false;
+		to: "../data/results/management_fly_null_model_good.csv" type: "csv" header:true rewrite: false;
 	}
 	
 	
@@ -1111,7 +1157,7 @@ species fly skills: [moving] control: fsm {
 
 	/* Fly agent aesthetics */
 	aspect fly_default {
-		//draw circle(searching_boundary) color: #pink empty: true;
+		draw circle(searching_boundary) color: #pink empty: true;
 		//draw circle(sensing_boundary) color: #lightpink empty: true;
 		draw square(0.3) color: fly_color;
 	}
@@ -1255,6 +1301,11 @@ species cohort control: fsm {
 					larvae_exited_fruit <- myself.nb_cohort + larvae_exited_fruit;
 				}
 			}
+			if my_larval_tree.in_season = true and my_larval_tree.is_crop = true {
+				ask my_larval_tree {
+				larvae_exited_crop_host <- myself.nb_cohort + larvae_exited_crop_host;
+				}
+			}
 		} 
 		transition to: pupae when: larval_growth >= 1.0;	
 	}
@@ -1384,6 +1435,19 @@ experiment csv_import type: gui {
 				sensitivity_days_in_L_stage::int(data[3, i]), 
 				sensitivity_days_in_P_stage::int(data[4, i]),
 				season_gap::int(data[5,i])
+			];
+		}
+	}
+}
+
+experiment null_models type: gui {
+	action _init_ {
+		csv_file size_csv_file <- csv_file("../models/includes/null_model_good.csv", ",", false);
+		matrix data <- matrix(size_csv_file);
+		write data;
+		loop i from: 0 to: data.rows -1 {  // 19
+			create simulation with: [
+				run::int(data[0,i])
 			];
 		}
 	}
