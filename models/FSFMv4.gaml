@@ -1165,8 +1165,10 @@ species cohort control: fsm {
 	
 	/* Males removed:  Chance of the emerge flies to be male and die as males are not the focus of this model */
  	action remove_males {
-		if (flip(0.5)) {
-			nb_cohort <- nb_cohort - 1;
+ 		loop i from: 1 to: nb_cohort {
+			if (flip(0.5)) {
+				nb_cohort <- nb_cohort - 1;
+			}
 		}
 	}
 
