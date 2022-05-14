@@ -29,7 +29,7 @@ global torus: true {
  	float ave_daily;
 	
 	/*** INPUT PARAMETERS ***/
-	int nb_fly <- 10;
+	int nb_fly <- 963;
 //	int immigration_number <- 10;									/* Fly parameter */
 	int mature_age <- 10;											/* Fly parameter */
 	float sensing_boundary <- 10#m;									/* Fly parameter */
@@ -38,7 +38,7 @@ global torus: true {
 	string foraging_strategy <- "memory";							/* Fly parameter */
 	bool simultaneous_season <- true; 								/* Tree parameter */
 	bool poor_first <- false;
-	string global_path_file_name <- "../data/results/000_global1.csv";	/* Global parameter naming file */
+	string global_path_file_name <- "../data/results/global_init25p.csv";	/* Global parameter naming file */
 	int run;
 	
 	bool run_experiments <- true;						/* Global parameter: When false sets up model for sensitivity analysis of one fruit host */
@@ -136,16 +136,43 @@ global torus: true {
 		ave_daily <- (nb_adult_total  / (cycle + 1)) with_precision 3; 
 	}
 
+	int eggs_in_poor_host;
+	int eggs_in_average_host;
+	int eggs_in_good_host;
+	
+	int larvae_in_poor_host;
+	int larvae_in_average_host;
+	int larvae_in_good_host;
+	
+	int pupae_in_poor_host;
+	int pupae_in_average_host;
+	int pupae_in_good_host;
+	
+	int teneral_in_poor_host;
+	int teneral_in_average_host;
+	int teneral_in_good_host;
+
  	reflex calc_experimental_variables when: run_experiments = true {
  			total_fruit <- tree sum_of(each.calc_fruit_on_tree);
 			total_good_fruit <- tree where (each.fruit_quality = "good") sum_of (each.num_fruit_in_list);
 		 	total_poor_fruit <- tree where (each.fruit_quality = "poor") sum_of (each.num_fruit_in_list);
 		 	total_average_fruit <- tree where (each.fruit_quality = "average") sum_of (each.num_fruit_in_list);
 			
-//			flies_in_non_host <- tree where (each.fruit_quality = "non") sum_of (each.nb_flies_inside_tree);
-//			flies_in_poor_host <- tree where (each.fruit_quality = "poor") sum_of (each.nb_flies_inside_tree);
-//			flies_in_average_host <- tree where (each.fruit_quality = "average") sum_of (each.nb_flies_inside_tree);
-//			flies_in_good_host <- tree where (each.fruit_quality = "good") sum_of (each.nb_flies_inside_tree);
+			eggs_in_poor_host <- tree where (each.fruit_quality = "poor") sum_of (each.eggs_in_tree);
+			eggs_in_average_host <- tree where (each.fruit_quality = "average") sum_of (each.eggs_in_tree);
+			eggs_in_good_host <- tree where (each.fruit_quality = "good") sum_of (each.eggs_in_tree);
+			
+			larvae_in_poor_host <- tree where (each.fruit_quality = "poor") sum_of (each.nb_larvae_in_tree);
+			larvae_in_average_host <- tree where (each.fruit_quality = "average") sum_of (each.nb_larvae_in_tree);
+			larvae_in_good_host <- tree where (each.fruit_quality = "good") sum_of (each.nb_larvae_in_tree);
+			
+			pupae_in_poor_host <- tree where (each.fruit_quality = "poor") sum_of (each.nb_pupae_in_tree);
+			pupae_in_average_host <- tree where (each.fruit_quality = "average") sum_of (each.nb_pupae_in_tree);
+			pupae_in_good_host <- tree where (each.fruit_quality = "good") sum_of (each.nb_pupae_in_tree);
+			
+			teneral_in_poor_host <- tree where (each.fruit_quality = "poor") sum_of (each.nb_teneral_in_tree);
+			teneral_in_average_host <- tree where (each.fruit_quality = "average") sum_of (each.nb_teneral_in_tree);
+			teneral_in_good_host <- tree where (each.fruit_quality = "good") sum_of (each.nb_teneral_in_tree);
  	}
 	
  	// FINISH SIMULATION 
@@ -172,11 +199,18 @@ global torus: true {
 		total_good_fruit, 
 		total_poor_fruit, 
 		total_average_fruit,
-//		flies_in_good_host, 
-//		flies_in_average_host, 
-//		flies_in_non_host, 
-//		flies_in_poor_host, 
-//		flies_in_good_host,
+		eggs_in_good_host, 
+		eggs_in_average_host, 
+		eggs_in_poor_host, 
+		larvae_in_good_host,
+		larvae_in_average_host,
+		larvae_in_poor_host,
+		pupae_in_good_host,
+		pupae_in_average_host,
+		pupae_in_poor_host,
+		teneral_in_good_host,
+		teneral_in_average_host,
+		teneral_in_poor_host,
 		days_in_ave_host, 
 		days_in_non_host, 
 		days_in_poor_host, 
@@ -210,7 +244,7 @@ global torus: true {
 		to: sensitivity_global_path_file_name type: "csv" header: true rewrite: false;
  	}
  	
-// 	reflex save_map {
+// 	reflex save_map {   // Saving images of the map
 // 		save tree to: "../data/results/map" + map_name + "map.png" type: "image";
 // 		save fly to: "../data/results/map" + map_name + "fly.png" type: "image";
 // 	}
@@ -483,12 +517,18 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 	reflex tree_save {
 		if in_season = true {
 		save [string(cycle),
+			host,
 		    grid_x,
 		    grid_y,
 		    grid_value,
+		    nb_cohorts_inside,
+		    eggs_in_tree,
+		    nb_larvae_in_tree,
+		    nb_pupae_in_tree,
+		    nb_teneral_in_tree,
 		    nb_imm_flies_inside_tree,
 		    nb_flies_inside_tree]
-		to: "../data/results/000_tree1.csv" type: "csv" header:true rewrite: false;
+		to: "../data/results/tree_init25p.csv" type: "csv" header:true rewrite: false;
 		}
 	}
 	
@@ -730,7 +770,7 @@ species fly skills: [moving] control: fsm {
 			searching_boundary,
 			imm_cumulative_distance,
 			cumulative_distance]
-		to: "../data/results/000_fly1.csv" type: "csv" header:true rewrite: false;
+		to: "../data/results/fly_init25p.csv" type: "csv" header:true rewrite: false;
 	}
 	
 	
