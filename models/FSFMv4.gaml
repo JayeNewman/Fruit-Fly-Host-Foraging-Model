@@ -12,8 +12,8 @@ model FSFMv4
 
 global torus: true {
 	
-	file grid_map <- file("../includes/land50_fra10.asc");
-	//file grid_map <- file("../includes/single_fruit_5p.asc");
+	//file grid_map <- file("../includes/land50_fra10.asc");  // Running experiment simulations
+	file grid_map <- file("../includes/land50_1fruit.asc");   // Running sensitivity simulations
 	file proba_stay_tree <- csv_file("../includes/proba_of_staying_tree.csv", ","); 
 	//file grid_map;  			/* generic when multiple maps are utilised in the experiments */
 	string map_name;			/* For batch experiments that have multiple maps */
@@ -29,7 +29,7 @@ global torus: true {
  	float ave_daily;
 	
 	/*** INPUT PARAMETERS ***/
-	int nb_fly <- 963;
+	int nb_fly <- 50;
 //	int immigration_number <- 10;									/* Fly parameter */
 	int mature_age <- 10;											/* Fly parameter */
 	float sensing_boundary <- 10#m;									/* Fly parameter */
@@ -41,12 +41,13 @@ global torus: true {
 	string global_path_file_name <- "../data/results/global_init25p.csv";	/* Global parameter naming file */
 	int run;
 	
-	bool run_experiments <- true;						/* Global parameter: When false sets up model for sensitivity analysis of one fruit host */
+	bool run_experiments <- false;						/* Global parameter: When false sets up model for sensitivity analysis of one fruit host */
 	
 	// Sensitivity parameters
-	string sensitivity_fruit <- "good"; 				/* The fruit that the sensitivity analysis will define */ 
+	string sensitivity_fruit <- "poor"; 				/* The fruit that the sensitivity analysis will define */ 
 	int sensitivity_max_larvae_per_fruit <- 10; 		/* Tree grid parameter for sensitivity analysis in the "run_experiments = false" in the global environment. */ 
-	string sensitivity_global_path_file_name <- "../data/results/new_sens_test_global.csv";	/* Global parameter naming file */
+	int season_gap <- 16;								/* Time in weeks between seasons */
+	string sensitivity_global_path_file_name <- "../data/results/SAP_0to400_20220515.csv";	/* Global parameter naming file */
  
  	/* Cohort parameters 
  	 * To set for sensitivity analysis "run_experiments = false" in the global environment. */ 
@@ -174,12 +175,6 @@ global torus: true {
 			teneral_in_average_host <- tree where (each.fruit_quality = "average") sum_of (each.nb_teneral_in_tree);
 			teneral_in_good_host <- tree where (each.fruit_quality = "good") sum_of (each.nb_teneral_in_tree);
  	}
-	
- 	// FINISH SIMULATION 
- 	reflex stop_sim when: cycle = 1096 {
- 		do pause;
- 		do die;
-	}
  	
  	// SAVING FILES ---- Save code at each time step (from .csv file) for the experiments  
  	reflex save when: run_experiments = true { 
@@ -222,6 +217,26 @@ global torus: true {
 		
  	}
  	
+ 	
+ 	int eggs_in_sensitivity_fruit;
+ 	int larvae_in_sensitivity_fruit;
+ 	int pupae_in_sensitivity_fruit;
+ 	int teneral_in_sensitivity_fruit;
+ 	
+ 	reflex calc_sensitivity_variables when: run_experiments = false {
+ 			eggs_in_sensitivity_fruit <- tree where (each.fruit_quality = sensitivity_fruit) sum_of (each.eggs_in_tree);
+ 			larvae_in_sensitivity_fruit <- tree where (each.fruit_quality = sensitivity_fruit) sum_of (each.nb_larvae_in_tree);
+ 			pupae_in_sensitivity_fruit <- tree where (each.fruit_quality = sensitivity_fruit) sum_of (each.nb_pupae_in_tree);
+ 			teneral_in_sensitivity_fruit <- tree where (each.fruit_quality = sensitivity_fruit) sum_of (each.nb_teneral_in_tree);	
+ 	}
+	
+ 	// FINISH SIMULATION 
+ 	reflex stop_sim when: cycle = 1096 {
+ 		do pause;
+ 		do die;
+	}
+ 	
+ 	// SAVING SENSITVITY FILES ---- Save code at each time step (from .csv file) for the experiments 
  	reflex save_sensitivity when: run_experiments = false {
  		save 
 		[
@@ -234,6 +249,10 @@ global torus: true {
 		max_flies, 
 		total_fruit, 
 		daily_flies, 
+		eggs_in_sensitivity_fruit,
+		larvae_in_sensitivity_fruit,
+		pupae_in_sensitivity_fruit,
+		teneral_in_sensitivity_fruit,
 		sensitivity_max_larvae_per_fruit,
 		sensitivity_wing_length, 
 		sensitivity_larval_mortality, 
@@ -440,34 +459,31 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 				}
 		}
 		
+	/* SENSITIVITY SIMULATIONS */
+	reflex sensitivity_fruiting when: fruit_quality = sensitivity_fruit and run_experiments = false { 
+		if (simultaneous_season = true and  // Continuous fruiting in the sensitivity simulations.
+			current_date = date(current_date.year, 1,5) or
+			current_date = date(current_date.year, 8,25) or 
+			current_date = date(current_date.year, 2,1) or
+			current_date = date(current_date.year, 9,21) or
+			current_date = date(current_date.year, 1,19) or
+			current_date = date(current_date.year, 9,7)
+		)
 		
-//		reflex sensitivity_fruiting when: run_experiments = false { 
-//		if (simultaneous_season = true and (
-//			current_date = date(current_date.year, 1,5) or 
-//			current_date = date(current_date.year, 8,25) or
-//			current_date = date(current_date.year, 2,1) or
-//			current_date = date(current_date.year, 9,21) or
-//			current_date = date(current_date.year, 1,19) or
-//			current_date = date(current_date.year, 9,7)
-//		)
-//			or
-//			
-//			simultaneous_season = false and (
-//				current_date = date(current_date.year, 8,25) or
-//				current_date = date(current_date.year, 8,25) + season_gap #week // or 
-//				// current_date = date(current_date.year, 11,12)   				// An extra season
-//			))
-//			{
-//			in_season <- true;
-//			}
-//			if in_season = true {
-//				do start_season;
-//			
-//			if season_day > b and length(list_of_fruit) < 1 and days_fruit_fallen > 14 {
-//					do reset_season;
-//				}
-//			}
-//		}
+		or (simultaneous_season = false and current_date = date(current_date.year, 8,25) or 
+			current_date = date(current_date.year, 8,25) + season_gap #week	// Season gap between first season and the next season. Two seasons per year. For sensitivity simulations.
+		) 
+			{
+			in_season <- true;
+			}
+			if in_season = true {
+				do start_season;
+			
+			if season_day > b and length(list_of_fruit) < 1 and days_fruit_fallen > 14 {
+					do reset_season;
+				}
+			}
+		}
 	
 	/* CALCULATE THE EGGS IN A TREE
 	 * If the tree is a host tree and has at least 1 fruit or greater on the tree
@@ -514,7 +530,7 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
  		percent_overcapacity <- percent_occupancy - 100;
 		}
 		
-	reflex tree_save {
+	reflex tree_save when: run_experiments = true {
 		if in_season = true {
 		save [string(cycle),
 			host,
@@ -763,14 +779,14 @@ species fly skills: [moving] control: fsm {
 		    my_pupal_mortality_chance,
 		    my_pupal_development_time,
 			wing_length,
-			//sensitivity_wing_length,
+			sensitivity_wing_length,
 			age,
-//			adult_age,
+			adult_age,
 			cumulative_fecundity,
 			searching_boundary,
 			imm_cumulative_distance,
 			cumulative_distance]
-		to: "../data/results/fly_init25p.csv" type: "csv" header:true rewrite: false;
+		to: "../data/results/SAP_fly_20220515.csv" type: "csv" header:true rewrite: false;
 	}
 	
 	
@@ -1347,7 +1363,7 @@ experiment multiple_maps type: gui {
 
 experiment csv_import type: gui {
 	action _init_ {
-		csv_file size_csv_file <- csv_file("../models/includes/SA_0_400_20220208.csv", ",", false);
+		csv_file size_csv_file <- csv_file("../models/includes/SA_0to400_20220515.csv", ",", false);  // SENSITIVITY parameter csv file
 		matrix data <- matrix(size_csv_file);
 		write data;
 		loop i from: 0 to: data.rows -1 {  // 19
@@ -1357,6 +1373,7 @@ experiment csv_import type: gui {
 				sensitivity_pupal_mortality::float(data[2, i]), 
 				sensitivity_days_in_L_stage::int(data[3, i]), 
 				sensitivity_days_in_P_stage::int(data[4, i])
+				//season_gap::int(data[5,i])
 			];
 		}
 	}
