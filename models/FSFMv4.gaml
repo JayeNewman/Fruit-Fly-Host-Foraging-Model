@@ -12,9 +12,8 @@ model FSFMv4
 
 global torus: true {
 	
-	file grid_map <- file("../includes/land50_fra10.asc");  // Running experiment simulations
 	file proba_stay_tree <- csv_file("../includes/proba_of_staying_tree.csv", ","); 
-	//file grid_map;  			/* generic when multiple maps are utilised in the experiments */
+	file grid_map <- file("../includes/land50_agg30.asc");  			/* generic when multiple maps are utilised in the experiments */
 	string map_name;			/* For batch experiments that have multiple maps */
 	float env_size <- 250#m; //250#m; // in a 200 x 200 grid this makes it 5m cells?
 	geometry shape <- square(env_size);
@@ -37,7 +36,7 @@ global torus: true {
 	string foraging_strategy <- "memory";							/* Fly parameter */
 	bool simultaneous_season <- false; 								/* Tree parameter */ // When this is true in the SA simulations it is sequential !!
 	bool poor_first <- false;
-	string global_path_file_name <- "../data/results/global_init25p.csv";	/* Global parameter naming file */
+	string global_path_file_name <- "../data/results/global_2022.csv";	/* Global parameter naming file */
 	int run;
 	
 	bool run_experiments <- true;						/* Global parameter: When false sets up model for sensitivity analysis of one fruit host */
@@ -50,11 +49,11 @@ global torus: true {
  
  	/* Cohort parameters 
  	 * To set for sensitivity analysis "run_experiments = false" in the global environment. */ 
-	float sensitivity_larval_mortality <- 0.8;      // These to be changed to no assignment when running simulations using csv file
-	float sensitivity_pupal_mortality <- 0.3;
-	int sensitivity_days_in_L_stage <- 6;
-	int sensitivity_days_in_P_stage <- 10;
-	float sensitivity_wing_length <- 4.0;  
+	float sensitivity_larval_mortality;      // These to be changed to no assignment when running simulations using csv file
+	float sensitivity_pupal_mortality;
+	int sensitivity_days_in_L_stage;
+	int sensitivity_days_in_P_stage;
+	float sensitivity_wing_length;  
 	
 	/* Fly parameters */ 
 	int daily_flies;
@@ -97,13 +96,7 @@ global torus: true {
  	int total_poor_fruit;
  	int total_average_fruit;
 	
-//	int flies_in_non_host;
-//	int flies_in_poor_host;
-//	int flies_in_average_host;
-//	int flies_in_good_host; 
-	
 	list<tree> host_trees <- tree where (each.grid_value >= 1);
-	
 	
 	// INITIALISE FLY
  	init {create fly number: nb_fly {
@@ -119,7 +112,6 @@ global torus: true {
 			//my_larval_host <- "good";
 			}
 		}
- 	 
  	 
  /*** REFLEXES ***/
  	
@@ -216,7 +208,7 @@ global torus: true {
 		
  	}
  	
- 	
+ 	// Sensitivity analysis
  	int eggs_in_sensitivity_fruit;
  	int larvae_in_sensitivity_fruit;
  	int pupae_in_sensitivity_fruit;
@@ -261,7 +253,8 @@ global torus: true {
 		]
 		to: sensitivity_global_path_file_name type: "csv" header: true rewrite: false;
  	}
- 	
+
+/* For taking map snapshots */	
 // 	reflex save_map {   // Saving images of the map
 // 		save tree to: "../data/results/map" + map_name + "map.png" type: "image";
 // 		save fly to: "../data/results/map" + map_name + "fly.png" type: "image";
@@ -305,6 +298,7 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 	list<fruit> list_of_fruit <- list_of_fruit update: list_of_fruit;
 	int num_fruit_in_list <- num_fruit_in_list update: length(list_of_fruit);
 	int max_larvae_per_fruit;
+	int infested_fruit;
 
 	// Initialisation of ascii file	
 	init {
@@ -376,6 +370,7 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 			days_fruit_fallen <- 0;
 			larvae_exited_fruit <- 0;
 			calc_fruit_on_tree <- 0;
+			infested_fruit <- 0;
 		}
 	
 	action start_season {
@@ -526,6 +521,10 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
  		percent_overcapacity <- percent_occupancy - 100;
 		}
 		
+	reflex count_infested_fruit when: in_season = true {
+			infested_fruit <- fruit where (each.larvae_within = true) count (each.fruitTree = self);
+	}
+		
 	reflex tree_save when: run_experiments = true {
 		if in_season = true {
 		save [string(cycle),
@@ -540,7 +539,7 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 		    nb_teneral_in_tree,
 		    nb_imm_flies_inside_tree,
 		    nb_flies_inside_tree]
-		to: "../data/results/tree_init25p.csv" type: "csv" header:true rewrite: false;
+		to: "../data/results/tree_agg10mff_20220612.csv" type: "csv" header:true rewrite: false;
 		}
 	}
 	
@@ -568,7 +567,15 @@ species fruit {
 		}
 	}
 	
-	reflex die when: available = false {
+	reflex die when: available = false { 			// Record infestation and then die
+		save [string(cycle),
+			name,
+			host,
+			fruitTree,
+			fruitTree.grid_value,
+			egg_clutch,
+			larvae_within]
+		to: "../data/results/fruit_agg10mff_20220612.csv" type: "csv" header:true rewrite: false;
 		do die;
 	}
 }
@@ -599,6 +606,10 @@ species fly skills: [moving] control: fsm {
 	float searching_boundary;
 	float cumulative_distance;						// includes immature cumulative distance
 	float imm_cumulative_distance;
+	int time_in_poor_host;
+	int time_in_average_host;
+	int time_in_good_host;
+	int time_in_non_host;
 		/* Weibul function parameters for daily fecundity */ 
  	float beta; 
  	float enya; 
@@ -715,29 +726,26 @@ species fly skills: [moving] control: fsm {
 		}
 				
 		adult_age <- adult_age + (step/86400);
-		
 		do update_tree_quality;
 		do update_lists;
+		
 		
 		if my_larval_host = "average" {
 			mortality_chance <- compute_mortality_chance(compute_survival_curve());
 			int daily_fecundity_result <- round(compute_daily_eggs());
 			daily_fecundity <- round(gauss(daily_fecundity_result, compute_sd_of_eggs()));
-			write fly.name + " " + daily_fecundity + " " + my_larval_host + " " + wing_length;
 		}
 		
 		if my_larval_host = "poor" {
 			mortality_chance <- compute_mortality_chance(compute_survival_curve());
 			int daily_fecundity_result <- round(compute_daily_eggs());
 			daily_fecundity <- round(gauss(daily_fecundity_result, compute_sd_of_eggs()));
-						write fly.name + " " + daily_fecundity+ " " + my_larval_host + " " + wing_length;
 		}
 		
 		if my_larval_host = "good" {
 			mortality_chance <- compute_mortality_chance(compute_survival_curve());
 			int daily_fecundity_result <- round(compute_daily_eggs());
-			daily_fecundity <- round(gauss(daily_fecundity_result, compute_sd_of_eggs()));
-						write fly.name + " " + daily_fecundity+ " " + my_larval_host + " " + wing_length;
+			daily_fecundity <- round(gauss(daily_fecundity_result, compute_sd_of_eggs()));			
 			
 			}
 			
@@ -751,7 +759,7 @@ species fly skills: [moving] control: fsm {
 		/* final action to perform as it determines the probability of the flies laying eggs. */ 
 		do probability_to_lay_eggs_in_tree; 
 		
-		/* update number of days in hosts */
+		/* update number of days in hosts for the global value. */
 		do calculate_days_in_hosts;
 		
 		/* update cumulative fecundity */
@@ -773,20 +781,24 @@ species fly skills: [moving] control: fsm {
 		total_lifetime_fecundity <- total_lifetime_fecundity + cumulative_fecundity;
 		save [string(cycle),
 			host,
+			time_in_non_host,
+			time_in_poor_host,
+			time_in_average_host,
+			time_in_good_host,
 		    my_larval_host,
 		    my_larval_mortality_chance,
 		    my_larval_development_time,
 		    my_pupal_mortality_chance,
 		    my_pupal_development_time,
 			wing_length,
-			sensitivity_wing_length,
+			//sensitivity_wing_length,
 			age,
 			adult_age,
 			cumulative_fecundity,
 			searching_boundary,
 			imm_cumulative_distance,
 			cumulative_distance]
-		to: "../data/results/fly_20220526.csv" type: "csv" header:true rewrite: false;
+		to: "../data/results/fly_agg10mff_20220612.csv" type: "csv" header:true rewrite: false;
 	}
 	
 	
@@ -1089,15 +1101,19 @@ species fly skills: [moving] control: fsm {
  	 action calculate_days_in_hosts {
  	 	if current_tree_quality = "non" {
  	 		days_in_non_host <- days_in_non_host + 1;
+ 	 		time_in_non_host <- time_in_non_host + 1;
  	 	}
  	 	if current_tree_quality = "poor" {
  	 		days_in_poor_host <- days_in_poor_host + 1;
+ 	 		time_in_poor_host <- time_in_poor_host + 1;
  	 	}
  	 	if current_tree_quality = "average" {
  	 		days_in_ave_host <- days_in_ave_host + 1;
+ 	 		time_in_average_host <- time_in_average_host + 1;
  	 	}
  	 	if current_tree_quality = "good" {
  	 		days_in_good_host <- days_in_good_host + 1;
+ 	 		time_in_good_host <- time_in_good_host + 1;
  	 	} 	 	
  	 }	
 
@@ -1146,8 +1162,8 @@ species cohort control: fsm {
 			if run_experiments = true { 
 			larval_mortality <- gauss(0.95, 0.05);  
 			pupal_mortality <- gauss(0.30, 0.15);  
-			days_in_L_stage <- round(gauss(13, 2));  
-			days_in_P_stage <- round(gauss(13, 2)); 
+			days_in_L_stage <- round(gauss(13, 1.5));  
+			days_in_P_stage <- round(gauss(13, 0.9)); 
 			}
 		}
 
@@ -1156,8 +1172,8 @@ species cohort control: fsm {
 			if run_experiments = true {
 			larval_mortality <- gauss(0.526, 0.21); 
 			pupal_mortality <- gauss(0.103, 0.10);
-			days_in_L_stage <- round(gauss(11, 2));
-			days_in_P_stage <- round(gauss(13, 2));
+			days_in_L_stage <- round(gauss(11, 1.3));
+			days_in_P_stage <- round(gauss(13, 0.9));
 			}
 		}
 
@@ -1166,8 +1182,8 @@ species cohort control: fsm {
 			egg_mortality <- gauss(0.115, 0.089);
 			larval_mortality <- gauss(0.385, 0.15);
 			pupal_mortality <- gauss(0.057, 0.05);
-			days_in_L_stage <- round(gauss(8, 0.60));
-			days_in_P_stage <- round(gauss(13, 2));
+			days_in_L_stage <- round(gauss(8, 0.7));
+			days_in_P_stage <- round(gauss(13, 0.9));
 			}
 		}
 		
@@ -1346,7 +1362,7 @@ experiment sensitivity {
 
 experiment multiple_maps type: gui {
 	action _init_ {
-		csv_file map_files <- csv_file("../includes/000.csv", ",", false);
+		csv_file map_files <- csv_file("../includes/agg10mff.csv", ",", false);
 		matrix data <- matrix(map_files);
 		write data;
 		loop i from: 0 to: data.rows -1 {  // 19
@@ -1381,7 +1397,7 @@ experiment csv_import type: gui {
 
 experiment null_models type: gui {
 	action _init_ {
-		csv_file size_csv_file <- csv_file("../models/includes/null_model_good.csv", ",", false);
+		csv_file size_csv_file <- csv_file("../models/includes/.csv", ",", false);
 		matrix data <- matrix(size_csv_file);
 		write data;
 		loop i from: 0 to: data.rows -1 {  // 19
