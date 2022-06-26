@@ -6,16 +6,20 @@
 */
 
 
-model FSFMv4
+model FFHF
 
-/* Insert your model definition here */
+/* The Fruit fly host foraging (FFHF) model, is an individual-based model for evaluation of population dynamics using bottom-up drivers of host quality. 
+ * Host-quality has both lethal and non-lethal effects that influence subsequent adult fitness traits. 
+ * The model allows for exploration of how different landscape complexity with different host-quality availability over time can modify the population dynamics of 	*Bactrocera tryoni*, 
+ * but can be modified to suit other fruit fly species and fruit quality types depending on empirical data.
+ */
 
 global torus: true {
 	
 	file proba_stay_tree <- csv_file("../includes/proba_of_staying_tree.csv", ","); 
-	file grid_map <- file("../includes/land50_agg30.asc");  			/* generic when multiple maps are utilised in the experiments */
-	string map_name;			/* For batch experiments that have multiple maps */
-	float env_size <- 250#m; //250#m; // in a 200 x 200 grid this makes it 5m cells?
+	file grid_map <- file("../includes/land50_agg30.asc");  		/* generic when multiple maps are utilised in the experiments */
+	string map_name;												/* For batch experiments that have multiple maps */
+	float env_size <- 250#m; 
 	geometry shape <- square(env_size);
  	date starting_date <- date(2020, 8, 24);
  	float step <- 1 #day;
@@ -28,14 +32,13 @@ global torus: true {
 	
 	/*** INPUT PARAMETERS ***/
 	int nb_fly <- 50;
-//	int immigration_number <- 10;									/* Fly parameter */
 	int mature_age <- 10;											/* Fly parameter */
 	float sensing_boundary <- 10#m;									/* Fly parameter */
 	int number_acceptable_larval_encounters <- 5; 					/* Fly parameter: number of times fruit with larvae can be encountered before they leave the tree */
 	string foraging_strategy <- "memory";							/* Fly parameter */
 	bool simultaneous_season <- false; 								/* Tree parameter */ // When this is true in the SA simulations it is sequential !!
 	bool poor_first <- false;
-	string global_path_file_name <- "../data/results/global_2022.csv";	/* Global parameter naming file */
+	string global_path_file_name <- "../data/results/global_results.csv";	/* Global parameter naming file */
 	int run;
 	
 	bool run_experiments <- true;						/* Global parameter: When false sets up model for sensitivity analysis of one fruit host */
@@ -44,11 +47,11 @@ global torus: true {
 	string sensitivity_fruit <- "poor"; 				/* The fruit that the sensitivity analysis will define */ 
 	int sensitivity_max_larvae_per_fruit <- 10; 		/* Tree grid parameter for sensitivity analysis in the "run_experiments = false" in the global environment. */ 
 	int season_gap <- 16;								/* Time in weeks between seasons */
-	string sensitivity_global_path_file_name <- "../data/results/SAP_0to400_20220515.csv";	/* Global parameter naming file */
+	string sensitivity_global_path_file_name <- "../data/results/SA_results.csv";	/* Global parameter naming file */
  
  	/* Cohort parameters 
  	 * To set for sensitivity analysis "run_experiments = false" in the global environment. */ 
-	float sensitivity_larval_mortality;      // These to be changed to no assignment when running simulations using csv file
+	float sensitivity_larval_mortality;      
 	float sensitivity_pupal_mortality;
 	int sensitivity_days_in_L_stage;
 	int sensitivity_days_in_P_stage;
@@ -74,7 +77,7 @@ global torus: true {
 			a <- 10.0;
 		}
 	}	
- 	float a;  	/* height of curve */ // 10 is sequential, 5 is when simultaneous
+ 	float a;  			/* height of curve */ // 10 is sequential, 5 is when simultaneous season
  	float b <- 20.0; 	/* centre of the peak */ 
  	float c <- 11.0; 	/* the width of the bell curve */ 
  	 
@@ -100,7 +103,6 @@ global torus: true {
 	// INITIALISE FLY
  	init {create fly number: nb_fly {
  		    location <- any_location_in(one_of(host_trees));	 	// Starts the fly in any host tree
- 		    //location <- any_location_in(one_of(tree));
  		    myTree <- tree closest_to self;
 			nb_adults <- nb_adults + 1;
 			nb_adult_total <- nb_adult_total + 1;
@@ -108,7 +110,6 @@ global torus: true {
 			adult_age <- 10.0;
 			my_cohort <- "start";
 			my_larval_host <- myTree.fruit_quality;					// When starting the fly in any host tree it assigns host quality as that host
-			//my_larval_host <- "good";
 			}
 		}
  	 
@@ -207,7 +208,7 @@ global torus: true {
 		
  	}
  	
- 	// Sensitivity analysis
+ 	// DATA for Sensitivity analysis
  	int eggs_in_sensitivity_fruit;
  	int larvae_in_sensitivity_fruit;
  	int pupae_in_sensitivity_fruit;
@@ -253,12 +254,6 @@ global torus: true {
 		to: sensitivity_global_path_file_name type: "csv" header: true rewrite: false;
  	}
 
-/* For taking map snapshots */	
-// 	reflex save_map {   // Saving images of the map
-// 		save tree to: "../data/results/map" + map_name + "map.png" type: "image";
-// 		save fly to: "../data/results/map" + map_name + "fly.png" type: "image";
-// 	}
-
 	reflex cycles { 
  		write 
  		 " cycle: " + cycle	+ " " + int(self)
@@ -275,7 +270,7 @@ global torus: true {
 
 grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false use_individual_shapes: false {
 	float grid_value <- grid_value;
-	rgb color; // <- rgb(int(1 * (percent_occupancy)), 1, int(1 * (percent_occupancy))) update: rgb(int(1 * (percent_occupancy)), 1, int(1 * (percent_occupancy)));
+	rgb color; 		
 	string fruit_quality;
 	float season_day;
 	int nb_cohorts_inside;
@@ -384,11 +379,11 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 		}
 			
  	reflex poor_tree_fruiting_first when: fruit_quality = "poor" and run_experiments = true {
-		if (simultaneous_season = true and poor_first = true // SIMULTANEOUS  and POOR host first
+		if (simultaneous_season = true and poor_first = true 	// SIMULTANEOUS  and POOR host first
 			and (current_date = date(current_date.year, 1,5) or current_date = date(current_date.year, 8,25)
 			))
 		 
-		or (simultaneous_season = true and poor_first = false // SIMULTANEOUS  and GOOD host first
+		or (simultaneous_season = true and poor_first = false 	// SIMULTANEOUS  and GOOD host first
 			and (current_date = date(current_date.year, 2,1) or current_date = date(current_date.year, 9,21)
 				))
 				
@@ -428,10 +423,10 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 		}
 		
 	reflex good_tree_fruiting when: fruit_quality = "good" and run_experiments = true {
-		if (simultaneous_season = true and poor_first = false // SIMULTANEOUS  and Good host first
+		if (simultaneous_season = true and poor_first = false 	// SIMULTANEOUS  and GOOD host first
 		and (current_date = date(current_date.year, 1,5) or current_date = date(current_date.year, 8,25)
 			))
-		or (simultaneous_season = true and poor_first = true // SIMULTANEOUS  and POOR host first
+		or (simultaneous_season = true and poor_first = true 	// SIMULTANEOUS  and POOR host first
 			and (current_date = date(current_date.year, 2,1) or current_date = date(current_date.year, 9,21)
 			))
 			
@@ -454,14 +449,14 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 		
 	/* SENSITIVITY SIMULATIONS */
 	reflex sensitivity_fruiting when: fruit_quality = sensitivity_fruit and run_experiments = false { 
-		if simultaneous_season = true and  // Continuous fruiting in the sensitivity simulations.
+		if simultaneous_season = true and  									// Continuous fruiting in the sensitivity simulations.
 		current_date = date(current_date.year, 11,12) or
 		current_date = date(current_date.year, 2,1) or 
 		current_date = date(current_date.year, 8,25
 		)
 		
 		or simultaneous_season = false and current_date = date(current_date.year, 8,25) or 
-			current_date = date(current_date.year, 8,25) + season_gap #week	// Season gap between first season and the next season. Two seasons per year. For sensitivity simulations.
+			current_date = date(current_date.year, 8,25) + season_gap #week	// Season gap between first season and the next season. Two seasons per year. For sensitivity simulations (run_experiments = false).
 		 
 			{
 			in_season <- true;
@@ -538,7 +533,7 @@ grid tree file: grid_map use_regular_agents: false use_neighbors_cache: false us
 		    nb_teneral_in_tree,
 		    nb_imm_flies_inside_tree,
 		    nb_flies_inside_tree]
-		to: "../data/results/tree_agg30mff_20220623.csv" type: "csv" header:true rewrite: false;
+		to: "../data/results/tree_results.csv" type: "csv" header:true rewrite: false;
 		}
 	}
 	
@@ -574,7 +569,7 @@ species fruit {
 			fruitTree.grid_value,
 			egg_clutch,
 			larvae_within]
-		to: "../data/results/fruit_agg30mff_20220623.csv" type: "csv" header:true rewrite: false;
+		to: "../data/results/fruit_results.csv" type: "csv" header:true rewrite: false;
 		do die;
 	}
 }
@@ -609,12 +604,14 @@ species fly skills: [moving] control: fsm {
 	int time_in_average_host;
 	int time_in_good_host;
 	int time_in_non_host;
+	
 		/* Weibul function parameters for daily fecundity */ 
  	float beta; 
  	float enya; 
  	float loc;
 	float coeff; 
 	int daily_fecundity_result;
+	
  		/* Survival function parameters */ 
  	float xmid;
 	float L;
@@ -677,7 +674,7 @@ species fly skills: [moving] control: fsm {
 
 	state adult {
 		fly_color <- #red;
-		enter { /* Fixed parameters */
+		enter { 							/*Fixed parameters*/
 		if my_larval_host = "good" {
  	 		xmid <- 137.0;					/*survival parameters*/
 			L <- 100.0;  					/*survival parameters*/
@@ -798,7 +795,7 @@ species fly skills: [moving] control: fsm {
 			searching_boundary,
 			imm_cumulative_distance,
 			cumulative_distance]
-		to: "../data/results/fly_agg30mff_20220623.csv" type: "csv" header:true rewrite: false;
+		to: "../data/results/fly_results.csv" type: "csv" header:true rewrite: false;
 	}
 	
 	
@@ -1264,20 +1261,21 @@ species cohort control: fsm {
 		exit {
 			if nb_cohort > 0 {
 				/* The density mortality is based on what has already left the fruit. 
-				 This is to make sure that the initial cohorts make it through the life cycle first. 
-				 As there was a tendancy that with very high larvae in a cohort all larvae die as the capacity is reached and so no larvae transition
-				 during the second season in some cases there would be no flies emerging, as all the larvae would die. */
+				 This is to make sure that the initial cohorts make it through the life cycle first. */
+				// ‘density_mortality’ includes larvae that exited fruit, ensuring the initial cohorts survive first.
+				// ‘my_capacity’ is the trees larval capacity (#fruit * max_larvae_per_fruit) at the time of egg lay
+				// ‘combined_mortality’ is the larval_mortality and the larvae that have transitioned to pupae. As more larvae transition to pupae the combined mortality increases.
 				 
 			loop i from: 1 to: nb_cohort { 
-				density_mortality <- (my_larval_tree.larvae_exited_fruit)/(my_capacity); 	// set at my_capacity as this is the tree capacity at the time of egg lay
-				combined_mortality <- 1-((1-larval_mortality)*(1-density_mortality)); 		// includes the larvae that have left the fruit. A density type function
+				density_mortality <- (my_larval_tree.larvae_exited_fruit)/(my_capacity); 	
+				combined_mortality <- 1-((1-larval_mortality)*(1-density_mortality)); 		
 					if flip(combined_mortality) {
 						nb_cohort <- nb_cohort - 1;	
 						}
 					}
 				}
 				if my_larval_tree.in_season = true {
-					ask my_larval_tree {   // this goes here as the total amount of pupae that have emerged from the fruit is a better indivation of larval competition for resources within the fruit
+					ask my_larval_tree {   				// the total amount of pupae that have emerged from the fruit
 					larvae_exited_fruit <- myself.nb_cohort + larvae_exited_fruit;
 				}
 			}
